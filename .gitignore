@@ -1,0 +1,7 @@
+*.pdb
+*.exe
+*.ilc
+*.ilk
+.vs/
+*.dll
+.vscode/
