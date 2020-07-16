@@ -26,6 +26,10 @@ mut:
 	masking_key [4]byte
 }
 
+const (
+	invalid_close_codes = [999, 1004, 1005, 1006, 1014, 1015, 1016, 1100, 2000, 2999, 5000, 65536]
+)
+
 // validate_client, validate client frame rules from RFC6455
 pub fn (mut ws Client) validate_frame(frame &Frame) ? {
 
@@ -107,7 +111,7 @@ fn (mut ws Client) read_payload(payload_len u64) ?[]byte {
 
 fn (mut ws Client) validate_utf_8(opcode OPCode, payload []byte) ? {
 
-	if opcode in [.text_frame] && !utf8_validate(payload) {
+	if opcode in [.text_frame, .close] && !utf8_validate(payload) {
 		ws.logger.error('malformed utf8 payload')
 		// ws.send_error_event('Recieved malformed utf8.')
 		ws.close(1007, 'malformed utf8 payload')

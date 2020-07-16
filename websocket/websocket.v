@@ -163,9 +163,11 @@ pub fn (mut ws Client) listen(fun CallbackFunc) ? {
 						ws.close(1002, 'close payload cannot be 1 byte') ?
 						return error('close payload cannot be 1 byte')
 					}
-					println('parsing code')
 					code := (int(msg.payload[0]) << 8) + int(msg.payload[1])
-					println('code: $code')
+					if code in invalid_close_codes {
+						ws.close(1002, 'invalid close code: $code') ?
+						return error('invalid close code: $code')
+					}
 					reason := if msg.payload.len > 2 {
 						msg.payload[2..]
 					} else {
