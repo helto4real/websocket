@@ -77,6 +77,34 @@ fn is_data_frame(opcode OPCode) bool {
 	return opcode in [.text_frame, .binary_frame]
 }
 
+[inline]
+fn (mut ws Client) read_payload(payload_len u64) ?[]byte {
+
+	if payload_len == 0 {
+		return []byte{}
+	}
+
+	// TODO: make a dynamic reusable memory pool here
+	mut buffer := []byte{cap: int(payload_len)}
+	mut read_buf := []byte{len: 1}
+	mut bytes_read := u64(0)
+
+	for bytes_read < payload_len {
+		len := ws.socket_read_into(mut read_buf) ?
+		if len != 1 {
+			return error('expected read all message, got zero')
+		}
+		bytes_read++
+		buffer << read_buf[0]
+	}
+
+	if bytes_read != payload_len {
+		return error('failed to read payload')
+	}
+
+	return buffer
+}
+
 // read_next_message reads 1 to n frames to compose a message
 pub fn (mut ws Client) read_next_message() ?&Message {
 	for {
@@ -84,80 +112,50 @@ pub fn (mut ws Client) read_next_message() ?&Message {
 		ws.logger.debug('frame:\n$frame')
 
 		ws.validate_frame(&frame) ?
-
 		
-		if frame.payload_len == 0 {
-			if !frame.fin && !is_control_frame(frame.opcode) {
-				ws.fragments << &Fragment {
-					data: []
-					opcode: frame.opcode
-				}
-				continue
-			}
+		mut frame_payload := ws.read_payload(frame.payload_len)?
+			 
+		if is_control_frame(frame.opcode) {
 			// Control frames can interject other frames
 			// and need to be returned directly
 			return &Message{
 				opcode: OPCode(frame.opcode)
+				payload: frame_payload
 			}
 		}
-		
-		// TODO: make a dynamic reusable memory pool here
-		mut buffer := []byte{cap: int(frame.payload_len)}
-		mut read_buf := []byte{len: 1}
-		mut bytes_read := u64(0)
 
-		for bytes_read < frame.payload_len {
-			len := ws.socket_read_into(mut read_buf) ?
-			if len != 1 {
-				return error('expected read all message, got zero')
+		// If the message is fragmented we just put it on fragments 
+		// a fragment is allowed to be of zero size of data
+		if !frame.fin  {
+			ws.fragments << &Fragment {
+				data: frame_payload
+				opcode: frame.opcode
 			}
-			bytes_read++
-			buffer << read_buf[0]
+			continue
 		}
 
-		if bytes_read != frame.payload_len {
-			return error('failed to read payload')
-		}
-
-		if frame.fin {
-			
-			if is_control_frame(frame.opcode) {
-				return &Message{
-					opcode: OPCode(frame.opcode)
-					payload: buffer
-				}
-			}
-			
-			// finishing frame
-			if ws.fragments.len > 0 {
-				defer {ws.fragments = []}
-				println('HERE')
-				if is_data_frame(frame.opcode) {
-					// Todo: this may include reserved future
-					// opcode range as well
-					ws.close(0, '') ?
-					return error('Unexpected frame opcode')
-				}
-				payload := ws.payload_from_fragments(buffer) ?
-				opcode := ws.opcode_from_fragments()
-				println('fragments: $ws.fragments, buffer: $buffer, opcode: $opcode, frame: $frame')
-				return &Message{
-					opcode: opcode
-					payload: payload
-				}
-			}
-
+		// Not fragments to put togehter just return the frame as message
+		if ws.fragments.len == 0 {
 			return &Message{
 				opcode: OPCode(frame.opcode)
-				payload: buffer
+				payload: frame_payload
 			}
-		} else {
-			if frame.opcode in [.text_frame, .binary_frame, .continuation] {
-				ws.fragments << &Fragment {
-					data: buffer
-					opcode: frame.opcode
-				}
-			}
+		}
+
+		defer {ws.fragments = []}
+		// println('HERE')
+		if is_data_frame(frame.opcode) {
+			// Todo: this may include reserved future
+			// opcode range as well
+			ws.close(0, '') ?
+			return error('Unexpected frame opcode')
+		}
+		payload := ws.payload_from_fragments(frame_payload) ?
+		opcode := ws.opcode_from_fragments()
+		println('fragments: $ws.fragments, buffer: $payload, opcode: $opcode, frame: $frame')
+		return &Message{
+			opcode: opcode
+			payload: payload
 		}
 	}
 
