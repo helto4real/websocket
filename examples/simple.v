@@ -29,7 +29,7 @@ fn main() {
 	// ws.connect() ?
 	// do_work(ws)
 	//249
-	for i in 1..78 {
+	for i in 217..218 {
 		println('\ncase: $i')
 		handle_case(i) or {println('error should be ok')}
 		// time.sleep_ms(300)

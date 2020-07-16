@@ -157,14 +157,23 @@ pub fn (mut ws Client) listen(fun CallbackFunc) ? {
 			}
 			.close {
 				ws.logger.debug('read: close')
+				println(msg.payload)
 				if msg.payload.len > 0 {
+					if msg.payload.len == 1 {
+						ws.close(1002, 'close payload cannot be 1 byte') ?
+						return error('close payload cannot be 1 byte')
+					}
+					println('parsing code')
 					code := (int(msg.payload[0]) << 8) + int(msg.payload[1])
+					println('code: $code')
 					reason := if msg.payload.len > 2 {
 						msg.payload[2..]
 					} else {
 						[]byte{}
 					}
-					ws.validate_utf_8(.close, reason)
+					if reason.len > 0 {
+						ws.validate_utf_8(.close, reason) ?
+					}
 					ws.logger.debug('close with reason, code: $code, reason: $reason')
 					// sending close back according to spec
 					ws.close(code, 'normal close response') ?
