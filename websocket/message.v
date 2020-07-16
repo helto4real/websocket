@@ -106,7 +106,8 @@ fn (mut ws Client) read_payload(payload_len u64) ?[]byte {
 }
 
 fn (mut ws Client) validate_utf_8(opcode OPCode, payload []byte) ? {
-	if opcode == .text_frame && !utf8_validate(payload) {
+
+	if opcode in [.text_frame] && !utf8_validate(payload) {
 		ws.logger.error('malformed utf8 payload')
 		// ws.send_error_event('Recieved malformed utf8.')
 		ws.close(1007, 'malformed utf8 payload')
@@ -136,6 +137,7 @@ pub fn (mut ws Client) read_next_message() ?&Message {
 		// If the message is fragmented we just put it on fragments 
 		// a fragment is allowed to be of zero size of data
 		if !frame.fin  {
+			// ws.validate_utf_8(frame.opcode, frame_payload) ?
 			ws.fragments << &Fragment {
 				data: frame_payload
 				opcode: frame.opcode

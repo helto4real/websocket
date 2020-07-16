@@ -164,6 +164,7 @@ pub fn (mut ws Client) listen(fun CallbackFunc) ? {
 					} else {
 						[]byte{}
 					}
+					ws.validate_utf_8(.close, reason)
 					ws.logger.debug('close with reason, code: $code, reason: $reason')
 					// sending close back according to spec
 					ws.close(code, 'normal close response') ?
