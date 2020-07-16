@@ -24,16 +24,15 @@ fn create_masking_key() []byte {
 	return buf
 }
 
-fn create_key_challenge_response(seckey string) string {
+fn create_key_challenge_response(seckey string) ? string {
+	if seckey.len == 0 {
+		return error('unexpected seckey lengt zero')
+	}
 	guid := '258EAFA5-E914-47DA-95CA-C5AB0DC85B11'
 	sha1buf := seckey + guid
 	hash := sha1.sum(sha1buf.bytes())
-	hashstr := string(byteptr(hash.data))
-	b64 := base64.encode(hashstr)
-	unsafe {
-		sha1buf.free()
-		hash.free()
-	}
+	b64 := base64.encode(tos(hash.data , hash.len))
+
 	return b64
 }
 
