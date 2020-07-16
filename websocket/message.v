@@ -105,6 +105,15 @@ fn (mut ws Client) read_payload(payload_len u64) ?[]byte {
 	return buffer
 }
 
+fn (mut ws Client) validate_utf_8(opcode OPCode, payload []byte) ? {
+	if opcode == .text_frame && !utf8_validate(payload) {
+		ws.logger.error('malformed utf8 payload')
+		// ws.send_error_event('Recieved malformed utf8.')
+		ws.close(1007, 'malformed utf8 payload')
+		return error('malformed utf8 payload')
+	}	
+	return none
+}
 // read_next_message reads 1 to n frames to compose a message
 pub fn (mut ws Client) read_next_message() ?&Message {
 	for {
@@ -114,7 +123,7 @@ pub fn (mut ws Client) read_next_message() ?&Message {
 		ws.validate_frame(&frame) ?
 		
 		mut frame_payload := ws.read_payload(frame.payload_len)?
-			 
+
 		if is_control_frame(frame.opcode) {
 			// Control frames can interject other frames
 			// and need to be returned directly
@@ -136,6 +145,7 @@ pub fn (mut ws Client) read_next_message() ?&Message {
 
 		// Not fragments to put togehter just return the frame as message
 		if ws.fragments.len == 0 {
+			ws.validate_utf_8(frame.opcode, frame_payload) ?
 			return &Message{
 				opcode: OPCode(frame.opcode)
 				payload: frame_payload
@@ -151,8 +161,9 @@ pub fn (mut ws Client) read_next_message() ?&Message {
 			return error('Unexpected frame opcode')
 		}
 		payload := ws.payload_from_fragments(frame_payload) ?
-		opcode := ws.opcode_from_fragments()
-		println('fragments: $ws.fragments, buffer: $payload, opcode: $opcode, frame: $frame')
+		opcode := ws.opcode_from_fragments() 
+		// println('fragments: $ws.fragments, buffer: $payload, opcode: $opcode, frame: $frame')
+		ws.validate_utf_8(opcode, payload) ?
 		return &Message{
 			opcode: opcode
 			payload: payload
