@@ -15,13 +15,19 @@ fn main() {
 }
 
 fn write_echo(mut ws websocket.Client) {
+	mut i := 1
 	for {
-		ws.write('hello echo!'.bytes(), .text_frame) or {panic(err)}
+		if i%5 == 0 {
+			ws.ping()
+		} else {
+			ws.write('hello echo!'.bytes(), .text_frame) or {panic(err)}
+		}
 		time.sleep_ms(1000)
+		i++
 	}
 }
 
 fn on_echo(mut ws websocket.Client, msg &websocket.Message, t voidptr) ? {
-	println('GOT: $msg.payload')
+	println('type: $msg.opcode, payload: $msg.payload')
 	return none
 }

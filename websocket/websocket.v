@@ -139,11 +139,23 @@ pub fn (mut ws Client) listen() ? {
 		match msg.opcode {
 			.text_frame {
 				ws.logger.debug('read: text')
-				ws.send_message_event(mut msg)
+				ws.send_message_event(mut msg) or {
+					ws.logger.error('error in message callback: $err')
+					if ws.panic_on_callback {
+						panic(err)
+					}
+					return none
+				}
 			}
 			.binary_frame {
 				ws.logger.debug('read: binary')
-				ws.send_message_event(mut msg)
+				ws.send_message_event(mut msg) or {
+					ws.logger.error('error in message callback: $err')
+					if ws.panic_on_callback {
+						panic(err)
+					}
+					return none
+				}
 			}
 			.ping {
 				ws.logger.debug('read: ping')
@@ -151,11 +163,17 @@ pub fn (mut ws Client) listen() ? {
 			}
 			.pong {
 				ws.logger.debug('read: pong')
-				ws.send_message_event(mut msg)
+				ws.send_message_event(mut msg) or {
+					ws.logger.error('error in message callback: $err')
+					if ws.panic_on_callback {
+						panic(err)
+					}
+					return none
+				}
 			}
 			.close {
 				ws.logger.debug('read: close')
-				defer {ws.send_close_event()}
+				defer {ws.manage_clean_close()}
 				if msg.payload.len > 0 {
 					if msg.payload.len == 1 {
 						ws.close(1002, 'close payload cannot be 1 byte') ?
@@ -195,6 +213,12 @@ pub fn (mut ws Client) listen() ? {
 	
 } 
 
+fn (mut ws Client) manage_clean_close() ? {
+	ws.send_close_event() or {
+		ws.logger.error('error in message callback: $err')
+	}
+	return none
+}
 pub fn (mut ws Client) ping() {
 	ws.send_control_frame(.ping, "PING", [])
 }
