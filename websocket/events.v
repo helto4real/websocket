@@ -29,21 +29,21 @@ struct CloseEventHandler {
 	ref      voidptr
 }
 
-pub type SocketMessageFn = fn (mut c Client, msg &Message)
+pub type SocketMessageFn = fn (c &Client, msg &Message)?
 
-pub type SocketErrorFn = fn (mut c Client, err string)
+pub type SocketErrorFn = fn (mut c &Client, err string)?
 
-pub type SocketOpenFn = fn (mut c Client)
+pub type SocketOpenFn = fn (mut c &Client)?
 
-pub type SocketCloseFn = fn (mut c Client, code int, reason string)
+pub type SocketCloseFn = fn (mut c &Client, code int, reason string)?
 
-pub type SocketMessageFn2 = fn (mut c Client, msg &Message, v voidptr)
+pub type SocketMessageFn2 = fn (c &Client, msg &Message, v voidptr)?
 
-pub type SocketErrorFn2 = fn (mut c Client, err string, v voidptr)
+pub type SocketErrorFn2 = fn (mut c &Client, err string, v voidptr)?
 
-pub type SocketOpenFn2 = fn (mut c Client, v voidptr)
+pub type SocketOpenFn2 = fn (mut c &Client, v voidptr)?
 
-pub type SocketCloseFn2 = fn (mut c Client, code int, reason string, v voidptr)
+pub type SocketCloseFn2 = fn (mut c &Client, code int, reason string, v voidptr)?
 
 // on_message, register a callback on new messages
 pub fn (mut ws Client) on_message(fun SocketMessageFn) {
@@ -113,9 +113,9 @@ fn (mut ws Client) send_message_event(mut msg Message) ? {
 	ws.logger.debug('sending on_message event')
 	for ev_handler in ws.message_callbacks {
 		if !ev_handler.is_ref {
-			ev_handler.handler(mut ws, msg)
+			ev_handler.handler(ws, msg)
 		} else {
-			ev_handler.handler2(mut ws, msg, ev_handler.ref)
+			ev_handler.handler2(ws, msg, ev_handler.ref)
 		}
 	}
 	return none
