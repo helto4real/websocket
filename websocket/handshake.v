@@ -36,7 +36,6 @@ fn (mut ws Client) read_handshake(seckey string) ? {
 			break
 		}
 	}
-
 	ws.handshake_handler(string(msg), seckey) ?
 }
 
@@ -44,7 +43,7 @@ fn (mut ws Client) handshake_handler(handshake_response string, seckey string) ?
 	ws.logger.debug("handshake response:\n$handshake_response")
 	lines := handshake_response.split_into_lines()
 	header := lines[0]
-
+	println('HEADER: $header')
 	if !header.starts_with('HTTP/1.1 101') && !header.starts_with('HTTP/1.0 101') {
 		return error('handshake_handler: invalid HTTP status response code')
 	}
@@ -83,5 +82,8 @@ fn (mut ws Client) handshake_handler(handshake_response string, seckey string) ?
 		return error('invalid websocket HTTP headers')
 	}
 	
-
+	// unsafe {
+	// 	lines.free()
+	// 	header.free()
+	// }
 }

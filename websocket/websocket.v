@@ -5,13 +5,14 @@ import net.urllib
 import time
 import log
 import sync
+import eventbus
 
 // Client represents websocket client state
 pub struct Client {
+	eb         	&eventbus.EventBus
 mut:
-	// io 			WebsocketIO
-	mtx        &sync.Mutex = sync.new_mutex()
-	write_lock &sync.Mutex = sync.new_mutex()
+	mtx        	&sync.Mutex = sync.new_mutex()
+	write_lock 	&sync.Mutex = sync.new_mutex()
 
 	sslctx  	&C.SSL_CTX
 	ssl     	&C.SSL
@@ -24,14 +25,11 @@ pub:
 	url     string
 
 pub mut:
-	conn 		net.TcpConn
-	// subscriber &eventbus.Subscriber
-	state  	State
-	nonce_size int = 16 // you can try 16 too}
-
-	nr_of_read 	int = 0
-	nr_of_close int = 0
-	nr_of_write int = 0
+	conn 				net.TcpConn
+	nonce_size 			int = 16 // you can try 18 too
+	panic_on_callback	bool = false
+	state  				State
+	subscriber 			&eventbus.Subscriber
 }
 
 enum Flag {
@@ -40,6 +38,8 @@ enum Flag {
 	has_upgrade
 }
 
+// State of the websocket connection. 
+// Messages should be sent only on state .open
 enum State {
 	connecting = 0
 	connected
@@ -54,7 +54,6 @@ pub:
 	payload     []byte
 }
 
-
 pub enum OPCode {
 	continuation = 0x00
 	text_frame = 0x01
@@ -64,10 +63,10 @@ pub enum OPCode {
 	pong = 0x0A
 }
 
-
+// new_client, instance a new websocket client 
 pub fn new_client(address string) ?&Client {
 	mut l := &log.Log{level: .info}
-
+	eb := eventbus.new()
 	return &Client{
 		sslctx: 0
 		ssl: 	0	
@@ -75,9 +74,11 @@ pub fn new_client(address string) ?&Client {
 		logger:	l
 		url:	address
 		state: .closed
+		eb: eb
+		subscriber: eb.subscriber
 	}
 }
-// dial, connects and do handshake procedure with remote server
+// connect, connects and do handshake procedure with remote server
 pub fn (mut ws Client) connect() ? {
 
 	match ws.state {
@@ -100,53 +101,49 @@ pub fn (mut ws Client) connect() ? {
 
 	ws.conn = net.dial_tcp('$uri.hostname:$uri.port') ? 
 
-	ws.set_option_keepalive() ?
+	optval := int(1)
+	ws.conn.sock.set_option_int(.keep_alive, optval)
 	ws.conn.set_read_timeout(3 * time.second)
 	ws.conn.set_write_timeout(3 * time.second)
 	
 	if ws.is_ssl {
 		ws.connect_ssl() ?
 	}
-	ws.set_state(.open)
-
-	ws.handshake(uri) ?
 	ws.set_state(.connected)
 
+	ws.handshake(uri) ?
+
+	ws.set_state(.open)
 	ws.logger.info('successfully connected to host $ws.url')
+	ws.send_open_event() or {
+		ws.logger.error('error in open event callback: $err')
+		if ws.panic_on_callback {
+			panic(err)
+		}
+		return none
+	}
 	return none
 } 
 
-fn (mut ws Client) set_option_keepalive() ? {
-	optval := int(1)
-	ws.conn.sock.set_option_int(.keep_alive, optval)
-	return none
-}
-pub type CallbackFunc fn(mut ws Client, msg &Message)
-
-pub fn (mut ws Client) listen(fun CallbackFunc) ? {
+// listen, listens to incoming messages and handles them 
+pub fn (mut ws Client) listen() ? {
 	ws.logger.info('Starting listener...')
 	defer {ws.logger.info('Quit listener...')}
 
-	for ws.state == .connected {
+	for ws.state == .open {
 		msg := ws.read_next_message() or {
 			ws.logger.error(err)
 			return error(err)
 		}
-		ws.nr_of_read++
 
 		match msg.opcode {
-			.continuation {
-				ws.logger.error('unexpected opcode continuation, nothing to continue')
-				ws.close(1002, 'nothing to continue') ?
-				return error('unexpected opcode continuation, nothing to continue')
-			}
 			.text_frame {
 				ws.logger.debug('read: text')
-				fun(mut ws, msg)
+				ws.send_message_event(mut msg)
 			}
 			.binary_frame {
 				ws.logger.debug('read: binary')
-				fun(mut ws, msg)
+				ws.send_message_event(mut msg)
 			}
 			.ping {
 				ws.logger.debug('read: ping')
@@ -154,10 +151,11 @@ pub fn (mut ws Client) listen(fun CallbackFunc) ? {
 			}
 			.pong {
 				ws.logger.debug('read: pong')
+				ws.send_message_event(mut msg)
 			}
 			.close {
 				ws.logger.debug('read: close')
-				println(msg.payload)
+				defer {ws.send_close_event()}
 				if msg.payload.len > 0 {
 					if msg.payload.len == 1 {
 						ws.close(1002, 'close payload cannot be 1 byte') ?
@@ -178,16 +176,21 @@ pub fn (mut ws Client) listen(fun CallbackFunc) ? {
 					}
 					ws.logger.debug('close with reason, code: $code, reason: $reason')
 					// sending close back according to spec
-					ws.close(code, 'normal close response') ?
+					ws.close(code, 'normal') ?
 
 				} else {
 					// sending close back according to spec
-					ws.close(1000, 'normal close') ?
+					ws.close(1000, 'normal') ?
 				}
 				
 				return none
 			}
-		}
+			.continuation {
+				ws.logger.error('unexpected opcode continuation, nothing to continue')
+				ws.close(1002, 'nothing to continue') ?
+				return error('unexpected opcode continuation, nothing to continue')
+			}
+		} 
 	}
 	
 } 
@@ -197,7 +200,7 @@ pub fn (mut ws Client) ping() {
 }
 
 pub fn (mut ws Client) write(bytes []byte, code OPCode) ? {
-	if ws.state != .connected || ws.conn.sock.handle < 1 {
+	if ws.state != .open || ws.conn.sock.handle < 1 {
 		// send error here later
 		return error('trying to write on a closed socket!')
 	}
@@ -288,7 +291,7 @@ pub fn (mut ws Client) close(code int, message string) ? {
 }
 
 fn (mut ws Client) send_control_frame(code OPCode, frame_typ string, payload []byte) ?int {
-	if ws.state !in [.connected, .closing]  && ws.conn.sock.handle >1 {
+	if ws.state !in [.open, .closing]  && ws.conn.sock.handle >1 {
 		return error("socket is not connected")
 	}	
 

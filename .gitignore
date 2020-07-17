@@ -6,3 +6,4 @@
 *.dll
 .vscode/
 autobahn
+ping

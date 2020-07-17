@@ -92,7 +92,7 @@ fn (mut ws Client) read_payload(payload_len u64) ?[]byte {
 	mut buffer := []byte{cap: int(payload_len)}
 	mut read_buf := []byte{len: 1}
 	mut bytes_read := u64(0)
-
+	
 	for bytes_read < payload_len {
 		len := ws.socket_read_into(mut read_buf) ?
 		if len != 1 {
@@ -219,7 +219,7 @@ pub fn (mut ws Client) parse_frame_header() ? Frame {
 	mut rbuff 			:= []byte{len:1}
 	mut mask_end_byte 	:= 0 
 
-	for ws.state == .connected  {
+	for ws.state == .open  {
 		// Todo: different error scenarios to make sure we close correctly on error
 		// reader.read_into(mut rbuff) ?
 		read_bytes := ws.socket_read_into(mut rbuff) ?
