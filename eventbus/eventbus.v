@@ -1,7 +1,10 @@
 module eventbus
 
+// changed to option for better error management of callback errors
+// todo: convert to generic instead
 pub type EventHandlerFn fn(voidptr, voidptr, voidptr) ?
 
+// todo: convert to generics  
 pub struct Publisher {
 mut:
 	registry &Registry
