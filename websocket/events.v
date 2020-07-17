@@ -30,19 +30,15 @@ struct CloseEventHandler {
 }
 
 pub type SocketMessageFn = fn (c &Client, msg &Message)?
-
-pub type SocketErrorFn = fn (mut c &Client, err string)?
-
-pub type SocketOpenFn = fn (mut c &Client)?
-
-pub type SocketCloseFn = fn (mut c &Client, code int, reason string)?
-
 pub type SocketMessageFn2 = fn (c &Client, msg &Message, v voidptr)?
 
+pub type SocketErrorFn = fn (mut c &Client, err string)?
 pub type SocketErrorFn2 = fn (mut c &Client, err string, v voidptr)?
 
+pub type SocketOpenFn = fn (mut c &Client)?
 pub type SocketOpenFn2 = fn (mut c &Client, v voidptr)?
 
+pub type SocketCloseFn = fn (mut c &Client, code int, reason string)?
 pub type SocketCloseFn2 = fn (mut c &Client, code int, reason string, v voidptr)?
 
 // on_message, register a callback on new messages
