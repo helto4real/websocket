@@ -1,9 +1,5 @@
 module websocket
 
-// pub fn utf8_validate_str(str string) bool {
-// 	return utf8_validate(str.str, str.len)
-// }
-
 struct Utf8State {
 mut:
 	index    int
@@ -28,8 +24,7 @@ pub fn utf8_validate(data []byte) bool {
 }
 
 fn (mut s Utf8State) seq(r0, r1, is_tail bool) bool {
-	if s.subindex == 0 || (s.index > 1 && s.subindex == 1) || (s.index >= 6 && s.subindex ==
-		2) {
+	if s.subindex == 0 || (s.index > 1 && s.subindex == 1) || (s.index >= 6 && s.subindex == 2) {
 		if (s.subindex == 0 && r0) || (s.subindex == 1 && r1) || (s.subindex == 2 && is_tail) {
 			s.subindex++
 			return true

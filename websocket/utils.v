@@ -18,21 +18,20 @@ fn htonl64(payload_len u64) byteptr {
 }
 
 fn create_masking_key() []byte {
-	mask_bit := byte(rand.intn(255)) //rand.intn(255)
+	mask_bit := byte(rand.intn(255)) 
 	buf := [`0`].repeat(4)
 	C.memcpy(buf.data, &mask_bit, 4)
 	return buf
 }
 
-fn create_key_challenge_response(seckey string) ? string {
+fn create_key_challenge_response(seckey string) ?string {
 	if seckey.len == 0 {
 		return error('unexpected seckey lengt zero')
 	}
 	guid := '258EAFA5-E914-47DA-95CA-C5AB0DC85B11'
 	sha1buf := seckey + guid
 	hash := sha1.sum(sha1buf.bytes())
-	b64 := base64.encode(tos(hash.data , hash.len))
-
+	b64 := base64.encode(tos(hash.data, hash.len))
 	return b64
 }
 
