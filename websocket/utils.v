@@ -4,8 +4,9 @@ import rand
 import crypto.sha1
 import encoding.base64
 
-fn htonl64(payload_len u64) byteptr {
-	mut ret := malloc(8)
+fn htonl64(payload_len u64) []byte {
+	mut ret := []byte{len:8}
+	// mut ret := malloc(8)
 	ret[0] = byte(((payload_len & (u64(0xff) << 56)) >> 56) & 0xff)
 	ret[1] = byte(((payload_len & (u64(0xff) << 48)) >> 48) & 0xff)
 	ret[2] = byte(((payload_len & (u64(0xff) << 40)) >> 40) & 0xff)

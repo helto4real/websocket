@@ -4,7 +4,7 @@ This is a refactor of the current web socket library to comply with V-like style
 
 ## Changes from original websocket implementation
 
-- Use only built-in datatypes, no voidptrs or byteptr
+- Use only built-in datatypes, no voidptrs or byteptr (for now the eventbus require it for callbacks)
 - Relying on V automatic free of resources (not done yet)
 - Comply to autobahn tests excluding compression
 - Use new socket implementation from Emily that will soon be standard in V
@@ -12,7 +12,7 @@ This is a refactor of the current web socket library to comply with V-like style
 - Refactor code so websocket.v contains only the code to understand basic implementations
     - moved communication to io.v
     - separation of handling frames and finished messages
-- Eventbus is using option as callback function for better error handling
+- Eventbus dependency removed and using own fn types. Now register callbacks with on_message, on_error, on_open, on_close functions
 
 ## Proposed / planned changes
 

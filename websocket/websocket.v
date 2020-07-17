@@ -9,11 +9,9 @@ import net.urllib
 import time
 import log
 import sync
-import eventbus
 
 // Client represents websocket client state
 pub struct Client {
-	eb                &eventbus.EventBus
 mut:
 	mtx               &sync.Mutex = sync.new_mutex()
 	write_lock        &sync.Mutex = sync.new_mutex()
@@ -22,6 +20,10 @@ mut:
 	flags             []Flag
 	fragments         []Fragment
 	logger            &log.Log
+	message_callbacks []MessageEventHandler
+	error_callbacks	  []ErrorEventHandler
+	open_callbacks	  []OpenEventHandler
+	close_callbacks	  []CloseEventHandler
 pub:
 	is_ssl            bool
 	url               string
@@ -30,7 +32,6 @@ pub mut:
 	nonce_size        int = 16 // you can try 18 too
 	panic_on_callback bool = false
 	state             State
-	subscriber        &eventbus.Subscriber
 }
 
 enum Flag {
@@ -71,7 +72,6 @@ pub fn new_client(address string) ?&Client {
 	mut l := &log.Log{
 		level: .info
 	}
-	eb := eventbus.new()
 	return &Client{
 		sslctx: 0
 		ssl: 0
@@ -79,8 +79,6 @@ pub fn new_client(address string) ?&Client {
 		logger: l
 		url: address
 		state: .closed
-		eb: eb
-		subscriber: eb.subscriber
 	}
 }
 
@@ -203,7 +201,7 @@ pub fn (mut ws Client) listen() ? {
 
 // this function was needed for defer
 fn (mut ws Client) manage_clean_close() ? {
-	ws.send_close_event() or {
+	ws.send_close_event(1000, 'closed by client') or {
 		ws.logger.error('error in message callback: $err')
 	}
 	return none
@@ -235,6 +233,7 @@ pub fn (mut ws Client) write(bytes []byte, code OPCode) ? {
 	} else if payload_len > 125 && payload_len <= 0xffff {
 		len16 := C.htons(payload_len)
 		header[1] = (126 | 0x80)
+		// todo: fix v style copy instead
 		unsafe {
 			C.memcpy(header.data + 2, &len16, 2)
 		}
@@ -245,8 +244,9 @@ pub fn (mut ws Client) write(bytes []byte, code OPCode) ? {
 	} else if payload_len > 0xffff && payload_len <= 0xffffffffffffffff { // 65535 && 18446744073709551615
 		len64 := htonl64(u64(payload_len))
 		header[1] = (127 | 0x80)
+		// todo: fix v style copy instead
 		unsafe {
-			C.memcpy(header.data + 2, len64, 8)
+			C.memcpy(header.data + 2, len64.data, 8)
 		}
 		header[10] = masking_key[0]
 		header[11] = masking_key[1]
@@ -292,11 +292,13 @@ pub fn (mut ws Client) close(code int, message string) ? {
 			close_frame[i + 2] = message[i]
 		}
 		ws.send_control_frame(.close, 'CLOSE', close_frame)?
+		ws.send_close_event(code, message)
 	} else {
 		ws.send_control_frame(.close, 'CLOSE', [])?
+		ws.send_close_event(code, '')
 	}
 	ws.fragments = []
-	ws.send_close_event()
+	
 	return none
 }
 
