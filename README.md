@@ -20,4 +20,5 @@ This is a refactor of the current web socket library to comply with V-like style
 - Strict comply to utf8 autobahn fast fail rule (it comply now but non strict)
 - Generics, use typed params in callback functions (no voidptr), generic eventbus
 - Interfaces, IO operations as interfaces for making tests more easy
-- Publish as module for testing
+- Publish as module
+- Set own timeouts

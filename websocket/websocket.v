@@ -1,3 +1,7 @@
+// The module websocket implements the websocket capabilities
+// it is a refactor of the original V-websocket client class
+// from @thecoderr 
+
 module websocket
 
 import emily33901.net
@@ -45,12 +49,14 @@ enum State {
 	closed
 }
 
+// Message, represents a whole message conbined from 1 to n frames
 pub struct Message {
 pub:
 	opcode  OPCode
 	payload []byte
 }
 
+// OPCode, the supported websocket frame types
 pub enum OPCode {
 	continuation = 0x00
 	text_frame = 0x01
@@ -92,6 +98,7 @@ pub fn (mut ws Client) connect() ? {
 	ws.conn = net.dial_tcp('$uri.hostname:$uri.port')?
 	optval := int(1)
 	ws.conn.sock.set_option_int(.keep_alive, optval)
+	// Todo: support setting own timeouts
 	ws.conn.set_read_timeout(3 * time.second)
 	ws.conn.set_write_timeout(3 * time.second)
 	if ws.is_ssl {
@@ -194,6 +201,7 @@ pub fn (mut ws Client) listen() ? {
 	}
 }
 
+// this function was needed for defer
 fn (mut ws Client) manage_clean_close() ? {
 	ws.send_close_event() or {
 		ws.logger.error('error in message callback: $err')
@@ -201,10 +209,13 @@ fn (mut ws Client) manage_clean_close() ? {
 	return none
 }
 
+// ping, sends ping message to server, 
+// 		 ping response will be pushed to message callback
 pub fn (mut ws Client) ping() {
 	ws.send_control_frame(.ping, 'PING', [])
 }
 
+// write, writes a byte array with a websocket messagetype
 pub fn (mut ws Client) write(bytes []byte, code OPCode) ? {
 	if ws.state != .open || ws.conn.sock.handle < 1 {
 		// send error here later
@@ -256,6 +267,7 @@ pub fn (mut ws Client) write(bytes []byte, code OPCode) ? {
 	return none
 }
 
+// close, closes the websocket connection 
 pub fn (mut ws Client) close(code int, message string) ? {
 	if ws.state in [.closed, .closing] || ws.conn.sock.handle <= 1 {
 		println('Socket allready closed')
@@ -284,10 +296,11 @@ pub fn (mut ws Client) close(code int, message string) ? {
 		ws.send_control_frame(.close, 'CLOSE', [])?
 	}
 	ws.fragments = []
-	// ws.send_close_event()
+	ws.send_close_event()
 	return none
 }
 
+// send_control_frame, sends a control frame to the server
 fn (mut ws Client) send_control_frame(code OPCode, frame_typ string, payload []byte) ?int {
 	if ws.state !in [.open, .closing] && ws.conn.sock.handle > 1 {
 		return error('socket is not connected')
@@ -322,6 +335,8 @@ fn (mut ws Client) send_control_frame(code OPCode, frame_typ string, payload []b
 	return none
 }
 
+// parse_uri, parses the url string to it's components
+// todo: support not using port to default ones
 fn parse_uri(url string) ?&Uri {
 	u := urllib.parse(url) or {
 		return error(err)
@@ -337,6 +352,7 @@ fn parse_uri(url string) ?&Uri {
 }
 
 [inline]
+// set_state sets current state in a thread safe way
 fn (mut ws Client) set_state(state State) {
 	ws.mtx.m_lock()
 	ws.state = state
@@ -344,6 +360,7 @@ fn (mut ws Client) set_state(state State) {
 }
 
 [inline]
+// reset_state, resets the websocket and can connect again
 fn (mut ws Client) reset_state() {
 	ws.mtx.m_lock()
 	ws.state = .closed
