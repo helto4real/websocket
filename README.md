@@ -22,3 +22,12 @@ This is a refactor of the current web socket library to comply with V-like style
 - Interfaces, IO operations as interfaces for making tests more easy
 - Publish as module
 - Set own timeouts
+
+## Remarks
+
+- It should not be used in production since memory management is not done yet in V
+
+## Attribution
+- the original author @thecodrr 
+- original code that was updated and moved to V
+   https://github.com/thecodrr/vws
