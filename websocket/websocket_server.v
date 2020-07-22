@@ -104,7 +104,7 @@ fn (mut s Server) handle_ping() {
 fn (mut s Server) serve_client(mut c Client)? {
 	handshake_response, server_client := s.handle_server_handshake(mut c)?
 
-	accept := s.send_accept_client_event(mut server_client)?
+	accept := s.send_connect_event(mut server_client)?
 	if !accept {
 		s.logger.debug('client not accepted')
 		c.shutdown_socket() ?

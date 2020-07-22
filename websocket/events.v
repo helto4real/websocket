@@ -51,7 +51,7 @@ pub fn (mut s Server) on_connect(fun AcceptClientFn)? {
 	s.accept_client_callbacks << fun
 }
 
-fn (mut s Server) send_accept_client_event(mut c ServerClient)  ?bool {
+fn (mut s Server) send_connect_event(mut c ServerClient)  ?bool {
 	if s.accept_client_callbacks.len == 0 {
 		// If no callback all client will be accepted
 		return true

@@ -66,18 +66,9 @@ fn main() {
 fn write_echo(mut ws websocket.Client) {
 	for i:=0; ; i++ {
 		// Server will send pings every 30 seconds
-		// if i % 5 == 0 {
-		// 	ws.ping()
-		// } else {
-			ws.write('hello echo!'.bytes(), .text_frame) or {
-				panic(err)
-			}
-		// }
+		ws.write('echo this!'.bytes(), .text_frame) or {
+			panic(err)
+		}
 		time.sleep_ms(1000)
 	}
-}
-
-fn on_echo(mut ws websocket.Client, msg &websocket.Message, t voidptr) ? {
-	println('type: $msg.opcode, payload: $msg.payload')
-	return none
 }
