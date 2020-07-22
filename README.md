@@ -13,12 +13,13 @@ This is a refactor of the current web socket library to comply with V-like style
     - moved communication to io.v
     - separation of handling frames and finished messages
 - Eventbus dependency removed and using own fn types. Now register callbacks with on_message, on_error, on_open, on_close functions
+- Basic socket server (work in progress)
 
 ## Proposed / planned changes
 
-- Implement a autobahn compliant websocket server
+- Make server autobahn compliant like client
 - Strict comply to utf8 autobahn fast fail rule (it comply now but non strict)
-- Generics, use typed params in callback functions (no voidptr), generic eventbus
+- Generics, use vweb type of app instead of voidptr for reference
 - Interfaces, IO operations as interfaces for making tests more easy
 - Publish as module
 - Set own timeouts
