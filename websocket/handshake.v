@@ -13,6 +13,119 @@ fn (mut ws Client) handshake(uri Uri) ? {
 	ws.read_handshake(seckey)?
 }
 
+// handshake manage the handshake part of connecting
+fn (mut s Server) handle_server_handshake(mut c Client) ?(string, string) {
+	mut total_bytes_read := 0
+	max_buffer := 1024
+	mut msg := []byte{cap: max_buffer}
+	mut buffer := []byte{len: 1}
+	for total_bytes_read < max_buffer {
+		bytes_read := c.socket_read_into(mut buffer)?
+		if bytes_read == 0 {
+			return error('unexpected no response from handshae with the client')
+		}
+		total_bytes_read++
+		msg << buffer[0]
+		if total_bytes_read > 5 &&
+			msg[total_bytes_read - 1] == `\n` &&
+			msg[total_bytes_read - 2] == `\r` &&
+			msg[total_bytes_read - 3] == `\n` &&
+			msg[total_bytes_read - 4] == `\r` {
+			break
+		}
+	}
+	handshake_response, resource_name := s.check_client_handshake(string(msg))?
+
+	return handshake_response, resource_name
+}
+
+fn (mut s Server) check_client_handshake(client_handshake string) ?(string, string) {
+	s.logger.debug('client handshake:\n$client_handshake')
+	
+	lines := client_handshake.split_into_lines()
+
+	get_tokens := lines[0].split(' ')
+	if get_tokens.len < 3 {
+		return error('unexpected get operation, $get_tokens')
+	}
+
+	if get_tokens[0].trim_space() != 'GET' {
+		return error("unexpected request '${get_tokens[0]}', expected 'GET'")
+	}
+
+	if get_tokens[2].trim_space() != 'HTTP/1.1' {
+		return error("unexpected request $get_tokens, expected 'HTTP/1.1'")
+	}
+
+	// path := get_tokens[1].trim_space()
+	mut seckey := ''
+	mut flags := []Flag{}
+
+	for i in 1 .. lines.len {
+		if lines[i].len <= 0 || lines[i] == '\r\n' {
+			continue
+		}
+		keys := lines[i].split(':')
+		match keys[0] {
+			'Upgrade', 'upgrade' {
+				flags << .has_upgrade
+			}
+			'Connection', 'connection' {
+				flags << .has_connection
+			}
+			'Sec-WebSocket-Key', 'sec-websocket-key' {
+				key := keys[1].trim_space()
+				s.logger.debug('got key: $key')
+				seckey = create_key_challenge_response(key)?
+				s.logger.debug('challenge: $seckey, response: ${keys[1]}')
+				
+				flags << .has_accept
+			}
+			else {
+				// We ignore other headers like protocol for now
+			}
+		}
+	}
+	if flags.len < 3 {
+		return error('invalid client handshake, $client_handshake')
+	}
+	println('here')
+	server_handshake := 'HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: $seckey\r\n\r\n'
+	return server_handshake, get_tokens[2]
+	
+	// if !header.starts_with('HTTP/1.1 101') && !header.starts_with('HTTP/1.0 101') {
+	// 	return error('handshake_handler: invalid HTTP status response code')
+	// }
+	// for i in 1 .. lines.len {
+	// 	if lines[i].len <= 0 || lines[i] == '\r\n' {
+	// 		continue
+	// 	}
+	// 	keys := lines[i].split(':')
+	// 	match keys[0] {
+	// 		'Upgrade', 'upgrade' {
+	// 			ws.flags << .has_upgrade
+	// 		}
+	// 		'Connection', 'connection' {
+	// 			ws.flags << .has_connection
+	// 		}
+	// 		'Sec-WebSocket-Accept', 'sec-websocket-accept' {
+	// 			ws.logger.debug('seckey: $seckey')
+	// 			challenge := create_key_challenge_response(seckey)?
+	// 			ws.logger.debug('challenge: $challenge, response: ${keys[1]}')
+	// 			if keys[1].trim_space() != challenge {
+	// 				return error('handshake_handler: Sec-WebSocket-Accept header does not match computed sha1/base64 response.')
+	// 			}
+	// 			ws.flags << .has_accept
+	// 		}
+	// 		else {}
+	// 	}
+	// }
+	// if ws.flags.len < 3 {
+	// 	ws.close(1002, 'invalid websocket HTTP headers')?
+	// 	return error('invalid websocket HTTP headers')
+	// }
+}
+
 // read_handshake reads the handshake and check if valid
 fn (mut ws Client) read_handshake(seckey string) ? {
 	mut total_bytes_read := 0

@@ -76,3 +76,4 @@ fn (mut ws Client) shutdown_socket() ? {
 	}
 	return none
 }
+

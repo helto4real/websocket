@@ -6,8 +6,24 @@ import time
 struct TestRef {
 	count	int
 }
+fn start_server()? {
+	mut s := websocket.new_server(30000, '' ) {
+	}
+	s.on_accept_client(fn (mut ws &websocket.ServerClient) ?bool {
+		// Here you can look att the client info and accept or not accept
+		// just returning a true/false
+		return true
+	})?
+
+	s.listen()
+
+}
+
 fn main() {
-	mut ws := websocket.new_client('wss://echo.websocket.org:443')?
+	go start_server()
+
+	mut ws := websocket.new_client('ws://localhost:30000')?
+	// mut ws := websocket.new_client('ws://echo.websocket.org:443')?
 
 	// use on_open_ref if you want to send any reference object
 	ws.on_open(fn (mut ws websocket.Client)? {

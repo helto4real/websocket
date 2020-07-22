@@ -29,8 +29,11 @@ struct CloseEventHandler {
 	ref      voidptr
 }
 
-pub type SocketMessageFn = fn (c &Client, msg &Message)?
-pub type SocketMessageFn2 = fn (c &Client, msg &Message, v voidptr)?
+pub type AcceptClientFn = fn (mut c &ServerClient) ?bool
+
+
+pub type SocketMessageFn = fn (mut c &Client, msg &Message)?
+pub type SocketMessageFn2 = fn (mut c &Client, msg &Message, v voidptr)?
 
 pub type SocketErrorFn = fn (mut c &Client, err string)?
 pub type SocketErrorFn2 = fn (mut c &Client, err string, v voidptr)?
@@ -41,6 +44,23 @@ pub type SocketOpenFn2 = fn (mut c &Client, v voidptr)?
 pub type SocketCloseFn = fn (mut c &Client, code int, reason string)?
 pub type SocketCloseFn2 = fn (mut c &Client, code int, reason string, v voidptr)?
 
+pub fn (mut s Server) on_accept_client(fun AcceptClientFn)? {
+	if s.accept_client_callbacks.len > 0 {
+		return error('only one callback can be registered for accept client')
+	}
+	s.accept_client_callbacks << fun
+}
+
+fn (mut s Server) send_accept_client_event(mut c ServerClient)  ?bool {
+	if s.accept_client_callbacks.len == 0 {
+		// If no callback all client will be accepted
+		return true
+	}
+	fun := s.accept_client_callbacks[0]
+
+	res := fun(mut c)?
+	return res
+}
 // on_message, register a callback on new messages
 pub fn (mut ws Client) on_message(fun SocketMessageFn) {
 	ws.message_callbacks << MessageEventHandler{

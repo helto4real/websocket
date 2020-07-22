@@ -12,6 +12,7 @@ import sync
 
 // Client represents websocket client state
 pub struct Client {
+	is_server		  bool = false
 mut:
 	mtx               &sync.Mutex = sync.new_mutex()
 	write_lock        &sync.Mutex = sync.new_mutex()
@@ -32,6 +33,7 @@ pub mut:
 	nonce_size        int = 16 // you can try 18 too
 	panic_on_callback bool = false
 	state             State
+	resource_name	  string
 }
 
 enum Flag {
@@ -69,14 +71,12 @@ pub enum OPCode {
 
 // new_client, instance a new websocket client
 pub fn new_client(address string) ?&Client {
-	mut l := &log.Log{
-		level: .info
-	}
 	return &Client{
+		is_server: false
 		sslctx: 0
 		ssl: 0
 		is_ssl: address.starts_with('wss')
-		logger: l
+		logger: &log.Log{level: .info}
 		url: address
 		state: .closed
 	}
@@ -320,7 +320,9 @@ fn (mut ws Client) send_control_frame(code OPCode, frame_typ string, payload []b
 	if code == .close {
 		if payload.len > 2 {
 			mut parsed_payload := [`0`].repeat(payload.len + 1)
-			C.memcpy(parsed_payload.data, &payload[0], payload.len)
+			unsafe {
+				C.memcpy(parsed_payload.data, &payload[0], payload.len)
+			}
 			parsed_payload[payload.len] = `\0`
 			for i in 0 .. payload.len {
 				control_frame[6 + i] = (parsed_payload[i] ^ masking_key[i % 4]) & 0xff
