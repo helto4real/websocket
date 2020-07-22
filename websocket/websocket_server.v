@@ -3,19 +3,26 @@ module websocket
 
 import emily33901.net
 import log
+import sync
+import time 
 
 pub struct Server {
 mut: 
-	clients	[]&ServerClient
-	logger &log.Log
-	ls net.TcpListener
+	mtx               		&sync.Mutex = sync.new_mutex()
+	clients					[]&ServerClient
+	logger 					&log.Log
+	ls 						net.TcpListener
 	accept_client_callbacks []AcceptClientFn
-	message_callbacks []MessageEventHandler
+	message_callbacks 		[]MessageEventHandler
 
 
 pub:
 	port int
 	is_ssl bool = false
+
+pub mut:
+	ping_interval 	int = 30
+	state    		State
 }
 
 struct ServerClient {
@@ -30,19 +37,68 @@ pub fn new_server(port int, route string) &Server{
 
 	return &Server {
 		port: port
-		logger: &log.Log{level: .debug}
+		logger: &log.Log{level: .info}
+		state: .closed
 	}
+}
+
+pub fn (mut s Server) set_ping_interval(seconds int) {
+	s.ping_interval = seconds
 }
 
 pub fn (mut s Server) listen() ? {
 	s.logger.info('start listen on port $s.port')
 	s.ls = net.listen_tcp(s.port) ?
-
+	s.set_state(.open)
+	go s.handle_ping()
 	for {
 		c := s.accept_new_client() or { continue }
 		go s.serve_client(mut c)
 	}
 	s.logger.info('End listen on port $s.port')
+}
+
+fn (mut s Server) close() {
+	
+}
+
+// Todo: make thread safe
+fn (mut s Server) handle_ping() {
+	mut unix_time := time.now().unix
+	for s.state == .open {
+		time.sleep_ms(100)
+		now := time.now().unix
+		diff := now - unix_time
+		mut clients_to_remove := []&ServerClient{}
+		if diff >= s.ping_interval {
+			unix_time = now
+			for c in s.clients {
+				if c.client.state == .open {
+					c.client.ping() or {
+						s.logger.debug('error sending ping to client')
+						// todo fix better close message
+						c.client.close(1000, 'ping send error') or {
+							// we want to continue even if error
+							continue
+						}
+						clients_to_remove << c
+					}
+				}
+			}
+			for c in s.clients {
+				if c.client.state == .open && (time.now().unix - c.client.last_pong_ut) > s.ping_interval*2 {
+					clients_to_remove << c
+					c.client.close(1000, 'no pong received') or {
+						continue
+					}	
+				}
+			}
+			for cr in clients_to_remove {
+				s.clients.delete(cr)
+			}
+		}
+
+	}
 }
 
 fn (mut s Server) serve_client(mut c Client)? {
@@ -84,6 +140,15 @@ fn (mut s Server) accept_new_client() ?&Client{
 		ssl : 0
 		logger: s.logger
 		state: .open
+		last_pong_ut: time.now().unix
 	}
 	return c
+}
+
+[inline]
+// set_state sets current state in a thread safe way
+fn (mut s Server) set_state(state State) {
+	s.mtx.m_lock()
+	s.state = state
+	s.mtx.unlock()
 }

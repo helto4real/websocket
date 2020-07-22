@@ -9,7 +9,7 @@ struct TestRef {
 fn start_server()? {
 	mut s := websocket.new_server(30000, '' ) {
 	}
-	s.on_accept_client(fn (mut s &websocket.ServerClient) ?bool {
+	s.on_connect(fn (mut s &websocket.ServerClient) ?bool {
 		// Here you can look att the client info and accept or not accept
 		// just returning a true/false
 		if s.resource_name != '/' {
@@ -65,13 +65,14 @@ fn main() {
 
 fn write_echo(mut ws websocket.Client) {
 	for i:=0; ; i++ {
-		if i % 5 == 0 {
-			ws.ping()
-		} else {
+		// Server will send pings every 30 seconds
+		// if i % 5 == 0 {
+		// 	ws.ping()
+		// } else {
 			ws.write('hello echo!'.bytes(), .text_frame) or {
 				panic(err)
 			}
-		}
+		// }
 		time.sleep_ms(1000)
 	}
 }

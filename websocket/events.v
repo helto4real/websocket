@@ -44,7 +44,7 @@ pub type SocketOpenFn2 = fn (mut c &Client, v voidptr)?
 pub type SocketCloseFn = fn (mut c &Client, code int, reason string)?
 pub type SocketCloseFn2 = fn (mut c &Client, code int, reason string, v voidptr)?
 
-pub fn (mut s Server) on_accept_client(fun AcceptClientFn)? {
+pub fn (mut s Server) on_connect(fun AcceptClientFn)? {
 	if s.accept_client_callbacks.len > 0 {
 		return error('only one callback can be registered for accept client')
 	}

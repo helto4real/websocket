@@ -34,6 +34,7 @@ pub mut:
 	panic_on_callback bool = false
 	state             State
 	resource_name	  string
+	last_pong_ut	  u64 
 }
 
 enum Flag {
@@ -161,6 +162,7 @@ pub fn (mut ws Client) listen() ? {
 			}
 			.pong {
 				ws.logger.debug('read: pong')
+				ws.last_pong_ut = time.now().unix
 				ws.send_message_event(mut msg) or {
 					ws.logger.error('error in message callback: $err')
 					if ws.panic_on_callback {
@@ -216,8 +218,8 @@ fn (mut ws Client) manage_clean_close() ? {
 
 // ping, sends ping message to server, 
 // 		 ping response will be pushed to message callback
-pub fn (mut ws Client) ping() {
-	ws.send_control_frame(.ping, 'PING', [])
+pub fn (mut ws Client) ping() ? {
+	ws.send_control_frame(.ping, 'PING', []) ?
 }
 
 // write, writes a byte array with a websocket messagetype
