@@ -33,6 +33,7 @@ const (
 // validate_client, validate client frame rules from RFC6455
 pub fn (mut ws Client) validate_frame(frame &Frame) ? {
 	if frame.rsv1 || frame.rsv2 || frame.rsv3 {
+		ws.logger.error('server($ws.is_server)\n$frame')
 		ws.close(1002, 'rsv cannot be other than 0, not negotiated')
 		return error('rsv cannot be other than 0, not negotiated')
 	}
@@ -41,7 +42,7 @@ pub fn (mut ws Client) validate_frame(frame &Frame) ? {
 		ws.close(1002, 'use of reserved opcode')?
 		return error('use of reserved opcode')
 	}
-	if frame.has_mask {
+	if frame.has_mask && !ws.is_server {
 		// Server should never send masked frames
 		// to client, close connection
 		ws.close(1002, 'client got masked frame')?
@@ -102,7 +103,7 @@ fn (mut ws Client) read_payload(payload_len u64) ?[]byte {
 // todo: support fail fast utf errors for strict autobahn conformance
 fn (mut ws Client) validate_utf_8(opcode OPCode, payload []byte) ? {
 	if opcode in [.text_frame, .close] && !utf8_validate(payload) {
-		ws.logger.error('malformed utf8 payload')
+		ws.logger.error('malformed utf8 payload, payload: $payload ($payload.len)')
 		// ws.send_error_event('Recieved malformed utf8.')
 		ws.close(1007, 'malformed utf8 payload')
 		return error('malformed utf8 payload')
@@ -114,9 +115,12 @@ fn (mut ws Client) validate_utf_8(opcode OPCode, payload []byte) ? {
 pub fn (mut ws Client) read_next_message() ?&Message {
 	for {
 		frame := ws.parse_frame_header()?
-		ws.logger.debug('frame:\n$frame')
+		ws.logger.debug('server($ws.is_server) frame:\n$frame')
 		ws.validate_frame(&frame)?
 		mut frame_payload := ws.read_payload(frame.payload_len)?
+		if frame.has_mask {
+			frame.unmask_sequence(mut frame_payload)
+		}
 		if is_control_frame(frame.opcode) {
 			// Control frames can interject other frames
 			// and need to be returned immediately
@@ -135,7 +139,10 @@ pub fn (mut ws Client) read_next_message() ?&Message {
 			continue
 		}
 		if ws.fragments.len == 0 {
-			ws.validate_utf_8(frame.opcode, frame_payload)?
+			ws.validate_utf_8(frame.opcode, frame_payload) or {
+				ws.logger.error('UTF8 validation error: $err, $frame_payload, len of payload($frame_payload.len)')
+				return error(err)
+			}
 			return &Message{
 				opcode: OPCode(frame.opcode)
 				payload: frame_payload
@@ -202,6 +209,7 @@ pub fn (mut ws Client) parse_frame_header() ?Frame {
 			// This is probably a timeout or close
 			continue
 		}
+		
 		buffer << rbuff[0]
 		// bytes_read++
 		// parses the first two header bytes to get basic frame information

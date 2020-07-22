@@ -118,15 +118,16 @@ pub fn (mut ws Client) connect() ? {
 
 // listen, listens to incoming messages and handles them
 pub fn (mut ws Client) listen() ? {
-	ws.logger.info('Starting listener...')
+	ws.logger.info('Starting client listener, server($ws.is_server)...')
 	defer {
-		ws.logger.info('Quit listener...')
+		ws.logger.info('Quit client listener, server($ws.is_server)...')
 	}
 	for ws.state == .open {
 		msg := ws.read_next_message() or {
 			ws.logger.error(err)
 			return error(err)
 		}
+		ws.logger.debug('server($ws.is_server) got message: $msg.opcode, payload: $msg.payload')
 		match msg.opcode {
 			.text_frame {
 				ws.logger.debug('read: text')
@@ -135,7 +136,7 @@ pub fn (mut ws Client) listen() ? {
 					if ws.panic_on_callback {
 						panic(err)
 					}
-					return none
+					continue
 				}
 			}
 			.binary_frame {
@@ -145,12 +146,18 @@ pub fn (mut ws Client) listen() ? {
 					if ws.panic_on_callback {
 						panic(err)
 					}
-					return none
+					continue
 				}
 			}
 			.ping {
-				ws.logger.debug('read: ping')
-				ws.send_control_frame(.pong, 'PONG', msg.payload)
+				ws.logger.debug('read: ping, sending pong')
+				ws.send_control_frame(.pong, 'PONG', msg.payload) or {
+					ws.logger.error('error in message callback sending PONG: $err')
+					if ws.panic_on_callback {
+						panic(err)
+					}
+					continue
+				}
 			}
 			.pong {
 				ws.logger.debug('read: pong')
@@ -159,7 +166,7 @@ pub fn (mut ws Client) listen() ? {
 					if ws.panic_on_callback {
 						panic(err)
 					}
-					return none
+					continue
 				}
 			}
 			.close {
@@ -215,53 +222,83 @@ pub fn (mut ws Client) ping() {
 
 // write, writes a byte array with a websocket messagetype
 pub fn (mut ws Client) write(bytes []byte, code OPCode) ? {
+	ws.logger.debug('server($ws.is_server): write code: $code, payload: $bytes')
 	if ws.state != .open || ws.conn.sock.handle < 1 {
 		// send error here later
 		return error('trying to write on a closed socket!')
 	}
 	payload_len := bytes.len
-	header_len := 6 + if payload_len > 125 { 2 } else { 0 } + if payload_len > 0xffff { 6 } else { 0 }
-	masking_key := create_masking_key()
+	mut header_len := 2 + if payload_len > 125 { 2 } else { 0 } + if payload_len > 0xffff { 6 } else { 0 }
+	if !ws.is_server {
+		header_len += 4
+	}
+	
 	mut header := [`0`].repeat(header_len)
 	header[0] = byte(code) | 0x80
-	if payload_len <= 125 {
-		header[1] = byte(payload_len | 0x80)
-		header[2] = masking_key[0]
-		header[3] = masking_key[1]
-		header[4] = masking_key[2]
-		header[5] = masking_key[3]
-	} else if payload_len > 125 && payload_len <= 0xffff {
-		len16 := C.htons(payload_len)
-		header[1] = (126 | 0x80)
-		// todo: fix v style copy instead
-		unsafe {
-			C.memcpy(header.data + 2, &len16, 2)
+	mut masking_key := []byte{}
+	if ws.is_server {
+		if payload_len <= 125 {
+			header[1] = byte(payload_len ) //| 0x80
+		} else if payload_len > 125 && payload_len <= 0xffff {
+			len16 := C.htons(payload_len)
+			header[1] = (126 ) //| 0x80
+			// todo: fix v style copy instead
+			unsafe {
+				C.memcpy(header.data + 2, &len16, 2)
+			}
+		} else if payload_len > 0xffff && payload_len <= 0xffffffffffffffff {
+			len64 := htonl64(u64(payload_len))
+			header[1] = (127) // 0x80
+			// todo: fix v style copy instead
+			unsafe {
+				C.memcpy(header.data + 2, len64.data, 8)
+			}
 		}
-		header[4] = masking_key[0]
-		header[5] = masking_key[1]
-		header[6] = masking_key[2]
-		header[7] = masking_key[3]
-	} else if payload_len > 0xffff && payload_len <= 0xffffffffffffffff { // 65535 && 18446744073709551615
-		len64 := htonl64(u64(payload_len))
-		header[1] = (127 | 0x80)
-		// todo: fix v style copy instead
-		unsafe {
-			C.memcpy(header.data + 2, len64.data, 8)
-		}
-		header[10] = masking_key[0]
-		header[11] = masking_key[1]
-		header[12] = masking_key[2]
-		header[13] = masking_key[3]
 	} else {
-		// l.c('write: frame too large')
-		ws.close(1009, 'frame too large')?
-		return error('frame too large')
+		masking_key = create_masking_key()
+		if payload_len <= 125 {
+			header[1] = byte(payload_len | 0x80)
+			header[2] = masking_key[0]
+			header[3] = masking_key[1]
+			header[4] = masking_key[2]
+			header[5] = masking_key[3]
+		} else if payload_len > 125 && payload_len <= 0xffff {
+			len16 := C.htons(payload_len)
+			header[1] = (126 | 0x80)
+			// todo: fix v style copy instead
+			unsafe {
+				C.memcpy(header.data + 2, &len16, 2)
+			}
+			header[4] = masking_key[0]
+			header[5] = masking_key[1]
+			header[6] = masking_key[2]
+			header[7] = masking_key[3]
+		} else if payload_len > 0xffff && payload_len <= 0xffffffffffffffff { // 65535 && 18446744073709551615
+			len64 := htonl64(u64(payload_len))
+			header[1] = (127 | 0x80)
+			// todo: fix v style copy instead
+			unsafe {
+				C.memcpy(header.data + 2, len64.data, 8)
+			}
+			header[10] = masking_key[0]
+			header[11] = masking_key[1]
+			header[12] = masking_key[2]
+			header[13] = masking_key[3]
+		} else {
+			// l.c('write: frame too large')
+			ws.close(1009, 'frame too large')?
+			return error('frame too large')
+		}
+
 	}
 	mut frame_buf := []byte{}
 	frame_buf << header
 	frame_buf << bytes
-	for i in 0 .. payload_len {
-		frame_buf[header_len + i] ^= masking_key[i % 4] & 0xff
+
+	if !ws.is_server {
+		for i in 0 .. payload_len {
+			frame_buf[header_len + i] ^= masking_key[i % 4] & 0xff
+		}
 	}
 	ws.socket_write(frame_buf)?
 	return none
@@ -303,20 +340,23 @@ pub fn (mut ws Client) close(code int, message string) ? {
 }
 
 // send_control_frame, sends a control frame to the server
-fn (mut ws Client) send_control_frame(code OPCode, frame_typ string, payload []byte) ?int {
+fn (mut ws Client) send_control_frame(code OPCode, frame_typ string, payload []byte) ? {
+	ws.logger.debug('server($ws.is_server): send control frame $code, frame_type: $frame_typ, payload: $payload')
 	if ws.state !in [.open, .closing] && ws.conn.sock.handle > 1 {
 		return error('socket is not connected')
 	}
-	header_len := 6
+	header_len := if ws.is_server {2} else {6}
 	frame_len := header_len + payload.len
 	mut control_frame := [`0`].repeat(frame_len)
 	masking_key := create_masking_key()
 	control_frame[0] = byte(code | 0x80)
-	control_frame[1] = byte(payload.len | 0x80)
-	control_frame[2] = masking_key[0]
-	control_frame[3] = masking_key[1]
-	control_frame[4] = masking_key[2]
-	control_frame[5] = masking_key[3]
+	control_frame[1] = if ws.is_server {byte(payload.len)} else {byte(payload.len | 0x80)}
+	if !ws.is_server {
+		control_frame[2] = masking_key[0]
+		control_frame[3] = masking_key[1]
+		control_frame[4] = masking_key[2]
+		control_frame[5] = masking_key[3]
+	}
 	if code == .close {
 		if payload.len > 2 {
 			mut parsed_payload := [`0`].repeat(payload.len + 1)
@@ -324,15 +364,20 @@ fn (mut ws Client) send_control_frame(code OPCode, frame_typ string, payload []b
 				C.memcpy(parsed_payload.data, &payload[0], payload.len)
 			}
 			parsed_payload[payload.len] = `\0`
-			for i in 0 .. payload.len {
-				control_frame[6 + i] = (parsed_payload[i] ^ masking_key[i % 4]) & 0xff
+			if !ws.is_server {
+				for i in 0 .. payload.len {
+					control_frame[6 + i] = (parsed_payload[i] ^ masking_key[i % 4]) & 0xff
+				}
 			}
 		}
 	} else {
-		for i in 0 .. payload.len {
-			control_frame[header_len + i] = (payload[i] ^ masking_key[i % 4]) & 0xff
+		if !ws.is_server {
+			for i in 0 .. payload.len {
+				control_frame[header_len + i] = (payload[i] ^ masking_key[i % 4]) & 0xff
+			}
 		}
 	}
+	
 	ws.socket_write(control_frame) or {
 		return error('send_control_frame: error sending $frame_typ control frame.')
 	}

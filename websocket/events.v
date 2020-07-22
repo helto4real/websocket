@@ -61,6 +61,23 @@ fn (mut s Server) send_accept_client_event(mut c ServerClient)  ?bool {
 	res := fun(mut c)?
 	return res
 }
+
+// on_message, register a callback on new messages
+pub fn (mut s Server) on_message(fun SocketMessageFn) {
+	s.message_callbacks << MessageEventHandler{
+		handler: fun
+	}
+}
+
+// on_message_ref, register a callback on new messages and provide a reference
+pub fn (mut s Server) on_message_ref(fun SocketMessageFn2, ref voidptr) {
+	s.message_callbacks << MessageEventHandler{
+		handler2: fun
+		ref: ref
+		is_ref: true
+	}
+}
+
 // on_message, register a callback on new messages
 pub fn (mut ws Client) on_message(fun SocketMessageFn) {
 	ws.message_callbacks << MessageEventHandler{

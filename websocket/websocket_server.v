@@ -10,6 +10,8 @@ mut:
 	logger &log.Log
 	ls net.TcpListener
 	accept_client_callbacks []AcceptClientFn
+	message_callbacks []MessageEventHandler
+
 
 pub:
 	port int
@@ -17,8 +19,10 @@ pub:
 }
 
 struct ServerClient {
-mut: 	
+pub:
 	resource_name string
+	client_key string
+pub mut: 	
 	client &Client
 }
 
@@ -36,28 +40,39 @@ pub fn (mut s Server) listen() ? {
 
 	for {
 		c := s.accept_new_client() or { continue }
-		// s.clients << c
 		go s.serve_client(mut c)
 	}
+	s.logger.info('End listen on port $s.port')
 }
 
 fn (mut s Server) serve_client(mut c Client)? {
-	handshake_response, resource_name := s.handle_server_handshake(mut c)?
+	handshake_response, server_client := s.handle_server_handshake(mut c)?
 
-	server_client := &ServerClient{
-		resource_name: resource_name
-		client: c
-	}
 	accept := s.send_accept_client_event(mut server_client)?
 	if !accept {
 		s.logger.debug('client not accepted')
 		c.shutdown_socket() ?
 		return none
 	} 
-	
+		
 	// The client is accepted
 	c.socket_write(handshake_response.bytes()) ?
 	s.clients << server_client
+
+	if s.message_callbacks.len > 0 {
+		for cb in s.message_callbacks {
+			if cb.is_ref {
+				c.on_message_ref(cb.handler2, cb.ref)
+			} else {
+				c.on_message(cb.handler)
+			}
+			
+		}
+	}
+	c.listen() or {
+		s.logger.error(err)
+		return error(err)
+	}
 }
 
 fn (mut s Server) accept_new_client() ?&Client{
@@ -68,6 +83,7 @@ fn (mut s Server) accept_new_client() ?&Client{
 		sslctx: 0
 		ssl : 0
 		logger: s.logger
+		state: .open
 	}
 	return c
 }

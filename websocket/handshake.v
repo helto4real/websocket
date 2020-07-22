@@ -14,7 +14,7 @@ fn (mut ws Client) handshake(uri Uri) ? {
 }
 
 // handshake manage the handshake part of connecting
-fn (mut s Server) handle_server_handshake(mut c Client) ?(string, string) {
+fn (mut s Server) handle_server_handshake(mut c Client) ?(string, &ServerClient) {
 	mut total_bytes_read := 0
 	max_buffer := 1024
 	mut msg := []byte{cap: max_buffer}
@@ -34,12 +34,12 @@ fn (mut s Server) handle_server_handshake(mut c Client) ?(string, string) {
 			break
 		}
 	}
-	handshake_response, resource_name := s.check_client_handshake(string(msg))?
+	handshake_response, client := s.parse_client_handshake(string(msg), mut c)?
 
-	return handshake_response, resource_name
+	return handshake_response, client
 }
 
-fn (mut s Server) check_client_handshake(client_handshake string) ?(string, string) {
+fn (mut s Server) parse_client_handshake(client_handshake string, mut c Client) ?(string, &ServerClient) {
 	s.logger.debug('client handshake:\n$client_handshake')
 	
 	lines := client_handshake.split_into_lines()
@@ -60,7 +60,7 @@ fn (mut s Server) check_client_handshake(client_handshake string) ?(string, stri
 	// path := get_tokens[1].trim_space()
 	mut seckey := ''
 	mut flags := []Flag{}
-
+	mut key := ''
 	for i in 1 .. lines.len {
 		if lines[i].len <= 0 || lines[i] == '\r\n' {
 			continue
@@ -74,7 +74,7 @@ fn (mut s Server) check_client_handshake(client_handshake string) ?(string, stri
 				flags << .has_connection
 			}
 			'Sec-WebSocket-Key', 'sec-websocket-key' {
-				key := keys[1].trim_space()
+				key = keys[1].trim_space()
 				s.logger.debug('got key: $key')
 				seckey = create_key_challenge_response(key)?
 				s.logger.debug('challenge: $seckey, response: ${keys[1]}')
@@ -89,41 +89,15 @@ fn (mut s Server) check_client_handshake(client_handshake string) ?(string, stri
 	if flags.len < 3 {
 		return error('invalid client handshake, $client_handshake')
 	}
-	println('here')
 	server_handshake := 'HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: $seckey\r\n\r\n'
-	return server_handshake, get_tokens[2]
 	
-	// if !header.starts_with('HTTP/1.1 101') && !header.starts_with('HTTP/1.0 101') {
-	// 	return error('handshake_handler: invalid HTTP status response code')
-	// }
-	// for i in 1 .. lines.len {
-	// 	if lines[i].len <= 0 || lines[i] == '\r\n' {
-	// 		continue
-	// 	}
-	// 	keys := lines[i].split(':')
-	// 	match keys[0] {
-	// 		'Upgrade', 'upgrade' {
-	// 			ws.flags << .has_upgrade
-	// 		}
-	// 		'Connection', 'connection' {
-	// 			ws.flags << .has_connection
-	// 		}
-	// 		'Sec-WebSocket-Accept', 'sec-websocket-accept' {
-	// 			ws.logger.debug('seckey: $seckey')
-	// 			challenge := create_key_challenge_response(seckey)?
-	// 			ws.logger.debug('challenge: $challenge, response: ${keys[1]}')
-	// 			if keys[1].trim_space() != challenge {
-	// 				return error('handshake_handler: Sec-WebSocket-Accept header does not match computed sha1/base64 response.')
-	// 			}
-	// 			ws.flags << .has_accept
-	// 		}
-	// 		else {}
-	// 	}
-	// }
-	// if ws.flags.len < 3 {
-	// 	ws.close(1002, 'invalid websocket HTTP headers')?
-	// 	return error('invalid websocket HTTP headers')
-	// }
+	server_client := &ServerClient{
+		resource_name: get_tokens[1]
+		client_key: key
+		client: c
+	}
+
+	return server_handshake, server_client
 }
 
 // read_handshake reads the handshake and check if valid

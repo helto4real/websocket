@@ -9,21 +9,28 @@ struct TestRef {
 fn start_server()? {
 	mut s := websocket.new_server(30000, '' ) {
 	}
-	s.on_accept_client(fn (mut ws &websocket.ServerClient) ?bool {
+	s.on_accept_client(fn (mut s &websocket.ServerClient) ?bool {
 		// Here you can look att the client info and accept or not accept
 		// just returning a true/false
+		if s.resource_name != '/' {
+			return false
+		}
 		return true
 	})?
 
+	s.on_message(fn (mut ws websocket.Client, msg &websocket.Message)? {
+		println('client sent: opcode: $msg.opcode, payload: $msg.payload')
+	})
 	s.listen()
 
+	println("ENDING SERVER")
 }
 
 fn main() {
 	go start_server()
 
 	mut ws := websocket.new_client('ws://localhost:30000')?
-	// mut ws := websocket.new_client('ws://echo.websocket.org:443')?
+	// mut ws := websocket.new_client('wss://echo.websocket.org:443')?
 
 	// use on_open_ref if you want to send any reference object
 	ws.on_open(fn (mut ws websocket.Client)? {
@@ -42,14 +49,14 @@ fn main() {
 
 	// use on_message_ref if you want to send any reference object
 	ws.on_message(fn (mut ws websocket.Client, msg &websocket.Message)? {
-		println('type: $msg.opcode payload:\n$msg.payload')
+		println('client got type: $msg.opcode payload:\n$msg.payload')
 	})
 
 	// you can add any pointer reference to use in callback
-	t := TestRef{count: 10}
-	ws.on_message_ref(fn (mut ws websocket.Client, msg &websocket.Message, t &TestRef)? {
-		println('type: $msg.opcode payload:\n$msg.payload ref: $t')
-	}, &t)
+	// t := TestRef{count: 10}
+	// ws.on_message_ref(fn (mut ws websocket.Client, msg &websocket.Message, t &TestRef)? {
+	// 	// println('type: $msg.opcode payload:\n$msg.payload ref: $t')
+	// }, &t)
 
 	ws.connect()?
 	go write_echo(mut ws)
