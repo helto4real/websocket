@@ -77,7 +77,7 @@ pub fn new_client(address string) ?&Client {
 		sslctx: 0
 		ssl: 0
 		is_ssl: address.starts_with('wss')
-		logger: &log.Log{level: .debug}
+		logger: &log.Log{level: .info}
 		url: address
 		state: .closed
 	}

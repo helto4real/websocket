@@ -1,3 +1,5 @@
+// use this to test websocket server to the autobahn test
+
 module main
 
 import websocket
