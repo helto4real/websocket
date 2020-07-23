@@ -4,7 +4,9 @@ import websocket
 import time
 
 struct TestRef {
+pub mut:
 	count	int
+	sw      time.StopWatch
 }
 fn start_server()? {
 	mut s := websocket.new_server(30000, '' ) {
@@ -18,11 +20,23 @@ fn start_server()? {
 		return true
 	})?
 
-	s.on_message(fn (mut ws websocket.Client, msg &websocket.Message)? {
-		println('client sent: opcode: $msg.opcode, payload: $msg.payload')
-	})
-	s.listen()
+	mut t := TestRef {
+		count: 0 
+		sw: time.new_stopwatch(auto_start:true)
+	
+	}
+	s.on_message_ref(fn (mut ws websocket.Client, msg &websocket.Message, mut t TestRef)? {
+		t.count++
+		if t.count >= 1000000 {
+			t.sw.stop()
+			println('total count: $t.count, elapsed: ${t.sw.elapsed()}')
+			ws.close(1000, '') ?
+		}
+	}, t)
 
+	s.listen() or {println(err)}
+
+	println('total count: $t.count, elapsed: ${t.sw.elapsed()}')
 	println("ENDING SERVER")
 }
 
@@ -47,10 +61,10 @@ fn main() {
 		println('closed')
 	})
 
-	// use on_message_ref if you want to send any reference object
-	ws.on_message(fn (mut ws websocket.Client, msg &websocket.Message)? {
-		println('client got type: $msg.opcode payload:\n$msg.payload')
-	})
+	// // use on_message_ref if you want to send any reference object
+	// ws.on_message(fn (mut ws websocket.Client, msg &websocket.Message)? {
+	// 	println('client got type: $msg.opcode payload:\n$msg.payload')
+	// })
 
 	// you can add any pointer reference to use in callback
 	// t := TestRef{count: 10}
@@ -64,11 +78,12 @@ fn main() {
 }
 
 fn write_echo(mut ws websocket.Client) {
-	for i:=0; ; i++ {
+	b := 'echo this!'.bytes()
+	for i:=0; i<1000000 ; i++  {
 		// Server will send pings every 30 seconds
-		ws.write('echo this!'.bytes(), .text_frame) or {
+		ws.write(b, .text_frame) or {
 			panic(err)
 		}
-		time.sleep_ms(1000)
+		// time.sleep_ms(1000)
 	}
 }
