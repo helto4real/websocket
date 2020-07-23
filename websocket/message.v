@@ -23,7 +23,7 @@ mut:
 	opcode      OPCode
 	has_mask    bool
 	payload_len u64
-	masking_key [4]byte
+	masking_key []byte = []byte{len: 4}
 }
 
 const (
@@ -77,20 +77,20 @@ fn is_data_frame(opcode OPCode) bool {
 
 [inline]
 // read_payload, reads the payload from socket
-fn (mut ws Client) read_payload(payload_len u64) ?[]byte {
+fn (mut ws Client) read_payload(payload_len int) ?[]byte {
 	if payload_len == 0 {
 		return []byte{}
 	}
 	// TODO: make a dynamic reusable memory pool here
-	mut buffer := []byte{cap: int(payload_len)}
+	mut buffer := []byte{cap: payload_len}
 	mut read_buf := []byte{len: 1}
-	mut bytes_read := u64(0)
+	mut bytes_read := 0
 	for bytes_read < payload_len {
 		len := ws.socket_read_into(mut read_buf)?
 		if len != 1 {
 			return error('expected read all message, got zero')
 		}
-		bytes_read++
+		bytes_read+=len
 		buffer << read_buf[0]
 	}
 	if bytes_read != payload_len {
@@ -103,7 +103,7 @@ fn (mut ws Client) read_payload(payload_len u64) ?[]byte {
 // todo: support fail fast utf errors for strict autobahn conformance
 fn (mut ws Client) validate_utf_8(opcode OPCode, payload []byte) ? {
 	if opcode in [.text_frame, .close] && !utf8_validate(payload) {
-		ws.logger.error('malformed utf8 payload, payload: $payload ($payload.len)')
+		ws.logger.error('malformed utf8 payload, payload len: ($payload.len)')
 		// ws.send_error_event('Recieved malformed utf8.')
 		ws.close(1007, 'malformed utf8 payload')
 		return error('malformed utf8 payload')
@@ -119,7 +119,10 @@ pub fn (mut ws Client) read_next_message() ?&Message {
 		ws.validate_frame(&frame)?
 		mut frame_payload := ws.read_payload(frame.payload_len)?
 		if frame.has_mask {
-			frame.unmask_sequence(mut frame_payload)
+			for i in 0 .. frame_payload.len {
+				frame_payload[i] ^= frame.masking_key[i % 4] & 0xff
+			}
+			// frame.unmask_sequence(mut frame_payload)
 		}
 		if is_control_frame(frame.opcode) {
 			// Control frames can interject other frames
@@ -140,7 +143,7 @@ pub fn (mut ws Client) read_next_message() ?&Message {
 		}
 		if ws.fragments.len == 0 {
 			ws.validate_utf_8(frame.opcode, frame_payload) or {
-				ws.logger.error('UTF8 validation error: $err, $frame_payload, len of payload($frame_payload.len)')
+				ws.logger.error('UTF8 validation error: $err, len of payload($frame_payload.len)')
 				return error(err)
 			}
 			return &Message{
@@ -228,7 +231,7 @@ pub fn (mut ws Client) parse_frame_header() ?Frame {
 				} else if frame.payload_len == 126 {
 					header_len_offset + 6
 				} else if frame.payload_len == 127 {
-					header_len_offset + 8
+					header_len_offset + 12 
 				} else {
 					0
 				} // Impossible
@@ -270,6 +273,7 @@ pub fn (mut ws Client) parse_frame_header() ?Frame {
 			frame.masking_key[1] = buffer[mask_end_byte - 3]
 			frame.masking_key[2] = buffer[mask_end_byte - 2]
 			frame.masking_key[3] = buffer[mask_end_byte - 1]
+			
 			return frame
 		}
 	}

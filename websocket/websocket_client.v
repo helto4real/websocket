@@ -77,7 +77,7 @@ pub fn new_client(address string) ?&Client {
 		sslctx: 0
 		ssl: 0
 		is_ssl: address.starts_with('wss')
-		logger: &log.Log{level: .info}
+		logger: &log.Log{level: .debug}
 		url: address
 		state: .closed
 	}
@@ -192,7 +192,8 @@ pub fn (mut ws Client) listen() ? {
 					}
 					ws.logger.debug('close with reason, code: $code, reason: $reason')
 					// sending close back according to spec
-					ws.close(code, 'normal')?
+					r := if reason.len > 0 {string(reason)} else {''}
+					ws.close(code, r)?
 				} else {
 					// sending close back according to spec
 					ws.close(1000, 'normal')?
@@ -350,26 +351,36 @@ fn (mut ws Client) send_control_frame(code OPCode, frame_typ string, payload []b
 	header_len := if ws.is_server {2} else {6}
 	frame_len := header_len + payload.len
 	mut control_frame := [`0`].repeat(frame_len)
-	masking_key := create_masking_key()
+	mut masking_key := []byte{}
+
 	control_frame[0] = byte(code | 0x80)
-	control_frame[1] = if ws.is_server {byte(payload.len)} else {byte(payload.len | 0x80)}
 	if !ws.is_server {
+		masking_key = create_masking_key()
+		control_frame[1] = byte(payload.len | 0x80)
 		control_frame[2] = masking_key[0]
 		control_frame[3] = masking_key[1]
 		control_frame[4] = masking_key[2]
 		control_frame[5] = masking_key[3]
+
+	} else {
+		control_frame[1] = byte(payload.len)
 	}
 	if code == .close {
-		if payload.len > 2 {
-			mut parsed_payload := [`0`].repeat(payload.len + 1)
-			unsafe {
-				C.memcpy(parsed_payload.data, &payload[0], payload.len)
-			}
-			parsed_payload[payload.len] = `\0`
+		if payload.len >= 2 {
+			
 			if !ws.is_server {
+				mut parsed_payload := [`0`].repeat(payload.len + 1)
+				unsafe {
+					C.memcpy(parsed_payload.data, &payload[0], payload.len)
+				}
+				parsed_payload[payload.len] = `\0`
 				for i in 0 .. payload.len {
 					control_frame[6 + i] = (parsed_payload[i] ^ masking_key[i % 4]) & 0xff
 				}
+			} else {
+				unsafe {
+					C.memcpy(control_frame.data+2, &payload[0], payload.len)
+				}	
 			}
 		}
 	} else {
@@ -377,9 +388,14 @@ fn (mut ws Client) send_control_frame(code OPCode, frame_typ string, payload []b
 			for i in 0 .. payload.len {
 				control_frame[header_len + i] = (payload[i] ^ masking_key[i % 4]) & 0xff
 			}
+		} else {
+			if payload.len > 0 {
+				unsafe {
+						C.memcpy(&control_frame[2], &payload[0], payload.len)
+				}
+			}
 		}
 	}
-	
 	ws.socket_write(control_frame) or {
 		return error('send_control_frame: error sending $frame_typ control frame.')
 	}
