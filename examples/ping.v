@@ -19,7 +19,7 @@ fn start_server()? {
 	})?
 
 	s.on_message(fn (mut ws websocket.Client, msg &websocket.Message)? {
-		println('client sent: opcode: $msg.opcode, payload: $msg.payload')
+		println('client ($ws.id) sent: opcode: $msg.opcode, payload: $msg.payload')
 	})
 	s.listen()
 

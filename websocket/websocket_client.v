@@ -9,6 +9,7 @@ import net.urllib
 import time
 import log
 import sync
+import rand
 
 // Client represents websocket client state
 pub struct Client {
@@ -28,6 +29,7 @@ mut:
 pub:
 	is_ssl            bool
 	url               string
+	id 				  string
 pub mut:
 	conn              net.TcpConn
 	nonce_size        int = 16 // you can try 18 too
@@ -80,6 +82,7 @@ pub fn new_client(address string) ?&Client {
 		logger: &log.Log{level: .info}
 		url: address
 		state: .closed
+		id: rand.uuid_v4()
 	}
 }
 

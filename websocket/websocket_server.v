@@ -5,6 +5,7 @@ import emily33901.net
 import log
 import sync
 import time 
+import rand 
 
 pub struct Server {
 mut: 
@@ -72,20 +73,23 @@ fn (mut s Server) handle_ping() {
 		mut clients_to_remove := []&ServerClient{}
 		if diff >= s.ping_interval {
 			unix_time = now
-			for c in s.clients {
-				if c.client.state == .open {
-					c.client.ping() or {
-						s.logger.debug('error sending ping to client')
-						// todo fix better close message
-						c.client.close(1000, 'ping send error') or {
-							// we want to continue even if error
-							continue
+			for x, _ in s.clients {
+					mut c := s.clients[x]
+					if c.client.state == .open {
+						c.client.ping() or {
+							s.logger.debug('error sending ping to client')
+							// todo fix better close message
+							c.client.close(1000, 'ping send error') or {
+								// we want to continue even if error
+								continue
+							}
+							clients_to_remove << c
 						}
-						clients_to_remove << c
 					}
-				}
+				
 			}
-			for c in s.clients {
+			for x, _ in s.clients {
+				mut c := s.clients[x]
 				if c.client.state == .open && (time.now().unix - c.client.last_pong_ut) > s.ping_interval*2 {
 					clients_to_remove << c
 					c.client.close(1000, 'no pong received') or {
@@ -141,6 +145,7 @@ fn (mut s Server) accept_new_client() ?&Client{
 		logger: s.logger
 		state: .open
 		last_pong_ut: time.now().unix
+		id: rand.uuid_v4()
 	}
 	return c
 }
