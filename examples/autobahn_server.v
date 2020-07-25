@@ -5,7 +5,7 @@ module main
 import websocket
 
 fn main() {
-	s := websocket.new_server(9001, '/')
+	mut s := websocket.new_server(9001, '/')
 	s.on_message(on_message)
 	s.listen()
 }

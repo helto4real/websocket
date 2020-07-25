@@ -5,5 +5,6 @@
 .vs/
 *.dll
 .vscode/
-autobahn
+autobahn_client
+autobahn_server
 ping
