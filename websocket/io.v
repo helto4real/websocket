@@ -31,7 +31,7 @@ fn (mut ws Client) socket_read_into(mut buffer []byte) ?int {
 // socket_write, writes the whole byte array provided to the socket
 fn (mut ws Client) socket_write(bytes []byte) ? {
 	if ws.state == .closed || ws.conn.sock.handle <= 1 {
-		println('Socket allready closed')
+		ws.debug_log('write: Socket allready closed')
 		return error('Socket allready closed')
 	}
 	ws.write_lock.m_lock()
@@ -69,6 +69,7 @@ fn (mut ws Client) socket_write(bytes []byte) ? {
 
 // shutdown_socket, proper shutdown make PR in Emeliy repo
 fn (mut ws Client) shutdown_socket() ? {
+	ws.debug_log('shutting down socket')
 	if ws.ssl != 0 {
 		ws.shutdown_ssl()?
 	} else {

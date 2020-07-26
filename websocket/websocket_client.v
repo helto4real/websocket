@@ -128,13 +128,16 @@ pub fn (mut ws Client) listen() ? {
 	}
 	for ws.state == .open {
 		msg := ws.read_next_message() or {
-			ws.logger.error(err)
+			if ws.state in [.closed] {
+				return none
+			}
+			ws.debug_log('failed to read next message: $err')
 			return error(err)
 		}
-		ws.logger.debug('server($ws.is_server) got message: $msg.opcode, payload: $msg.payload')
+		ws.debug_log('got message: $msg.opcode, payload: $msg.payload')
 		match msg.opcode {
 			.text_frame {
-				ws.logger.debug('read: text')
+				ws.debug_log('read: text')
 				ws.send_message_event(mut msg) or {
 					ws.logger.error('error in message callback: $err')
 					if ws.panic_on_callback {
@@ -144,7 +147,7 @@ pub fn (mut ws Client) listen() ? {
 				}
 			}
 			.binary_frame {
-				ws.logger.debug('read: binary')
+				ws.debug_log('read: binary')
 				ws.send_message_event(mut msg) or {
 					ws.logger.error('error in message callback: $err')
 					if ws.panic_on_callback {
@@ -154,7 +157,7 @@ pub fn (mut ws Client) listen() ? {
 				}
 			}
 			.ping {
-				ws.logger.debug('read: ping, sending pong')
+				ws.debug_log('read: ping, sending pong')
 				ws.send_control_frame(.pong, 'PONG', msg.payload) or {
 					ws.logger.error('error in message callback sending PONG: $err')
 					if ws.panic_on_callback {
@@ -164,7 +167,7 @@ pub fn (mut ws Client) listen() ? {
 				}
 			}
 			.pong {
-				ws.logger.debug('read: pong')
+				ws.debug_log('read: pong')
 				ws.last_pong_ut = time.now().unix
 				ws.send_message_event(mut msg) or {
 					ws.logger.error('error in message callback: $err')
@@ -175,7 +178,7 @@ pub fn (mut ws Client) listen() ? {
 				}
 			}
 			.close {
-				ws.logger.debug('read: close')
+				ws.debug_log('read: close')
 				defer {
 					ws.manage_clean_close()
 				}
@@ -193,13 +196,18 @@ pub fn (mut ws Client) listen() ? {
 					if reason.len > 0 {
 						ws.validate_utf_8(.close, reason)?
 					}
-					ws.logger.debug('close with reason, code: $code, reason: $reason')
-					// sending close back according to spec
-					r := if reason.len > 0 {string(reason)} else {''}
-					ws.close(code, r)?
+					if ws.state !in [.closing, .closed] {
+						// sending close back according to spec
+						ws.debug_log('close with reason, code: $code, reason: $reason')
+						r := if reason.len > 0 {string(reason)} else {''}
+						ws.close(code, r)?
+					}
 				} else {
-					// sending close back according to spec
-					ws.close(1000, 'normal')?
+					if ws.state !in [.closing, .closed] {
+						ws.debug_log('close with reason, no code')
+						// sending close back according to spec
+						ws.close(1000, 'normal')?
+					}
 				}
 				return none
 			}
@@ -210,6 +218,7 @@ pub fn (mut ws Client) listen() ? {
 			}
 		}
 	}
+	return none
 }
 
 // this function was needed for defer
@@ -228,7 +237,7 @@ pub fn (mut ws Client) ping() ? {
 
 // write, writes a byte array with a websocket messagetype
 pub fn (mut ws Client) write(bytes []byte, code OPCode) ? {
-	ws.logger.debug('server($ws.is_server): write code: $code, payload: $bytes')
+	ws.debug_log('write code: $code, payload: $bytes')
 	if ws.state != .open || ws.conn.sock.handle < 1 {
 		// send error here later
 		return error('trying to write on a closed socket!')
@@ -312,9 +321,10 @@ pub fn (mut ws Client) write(bytes []byte, code OPCode) ? {
 
 // close, closes the websocket connection 
 pub fn (mut ws Client) close(code int, message string) ? {
+	ws.debug_log('sending close, $code, $message')
 	if ws.state in [.closed, .closing] || ws.conn.sock.handle <= 1 {
-		println('Socket allready closed')
-		return error('Socket allready closed')
+		ws.debug_log('close: Websocket allready closed ($ws.state), $message, $code handle($ws.conn.sock.handle)')
+		return error('Socket allready closed: $code')
 	}
 	defer {
 		ws.shutdown_socket()
@@ -347,7 +357,7 @@ pub fn (mut ws Client) close(code int, message string) ? {
 
 // send_control_frame, sends a control frame to the server
 fn (mut ws Client) send_control_frame(code OPCode, frame_typ string, payload []byte) ? {
-	ws.logger.debug('server($ws.is_server): send control frame $code, frame_type: $frame_typ, payload: $payload')
+	ws.debug_log('send control frame $code, frame_type: $frame_typ, payload: $payload')
 	if ws.state !in [.open, .closing] && ws.conn.sock.handle > 1 {
 		return error('socket is not connected')
 	}
@@ -439,4 +449,12 @@ fn (mut ws Client) reset_state() {
 	ws.flags = []
 	ws.fragments = []
 	ws.mtx.unlock()
+}
+
+fn (mut ws Client) debug_log(text string) {
+	if ws.is_server {
+		ws.logger.debug('server-> $text')
+	} else {
+		ws.logger.debug('client-> $text')
+	}
 }

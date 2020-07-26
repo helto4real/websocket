@@ -8,7 +8,7 @@ fn (mut ws Client) handshake(uri Uri) ? {
 	seckey := base64.encode(nonce)
 	handshake := 'GET $uri.resource$uri.querystring HTTP/1.1\r\nHost: $uri.hostname:$uri.port\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: $seckey\r\nSec-WebSocket-Version: 13\r\n\r\n'
 	handshake_bytes := handshake.bytes()
-	ws.logger.debug('sending handshake: $handshake')
+	ws.debug_log('sending handshake: $handshake')
 	ws.socket_write(handshake_bytes)?
 	ws.read_handshake(seckey)?
 }
@@ -40,7 +40,7 @@ fn (mut s Server) handle_server_handshake(mut c Client) ?(string, &ServerClient)
 }
 
 fn (mut s Server) parse_client_handshake(client_handshake string, mut c Client) ?(string, &ServerClient) {
-	s.logger.debug('client handshake:\n$client_handshake')
+	s.logger.debug('server-> client handshake:\n$client_handshake')
 	
 	lines := client_handshake.split_into_lines()
 
@@ -75,9 +75,9 @@ fn (mut s Server) parse_client_handshake(client_handshake string, mut c Client) 
 			}
 			'Sec-WebSocket-Key', 'sec-websocket-key' {
 				key = keys[1].trim_space()
-				s.logger.debug('got key: $key')
+				s.logger.debug('server-> got key: $key')
 				seckey = create_key_challenge_response(key)?
-				s.logger.debug('challenge: $seckey, response: ${keys[1]}')
+				s.logger.debug('server-> challenge: $seckey, response: ${keys[1]}')
 				
 				flags << .has_accept
 			}
@@ -95,6 +95,7 @@ fn (mut s Server) parse_client_handshake(client_handshake string, mut c Client) 
 		resource_name: get_tokens[1]
 		client_key: key
 		client: c
+		server: s
 	}
 
 	return server_handshake, server_client
@@ -125,7 +126,7 @@ fn (mut ws Client) read_handshake(seckey string) ? {
 }
 
 fn (mut ws Client) check_handshake_response(handshake_response, seckey string) ? {
-	ws.logger.debug('handshake response:\n$handshake_response')
+	ws.debug_log('handshake response:\n$handshake_response')
 	lines := handshake_response.split_into_lines()
 	header := lines[0]
 	if !header.starts_with('HTTP/1.1 101') && !header.starts_with('HTTP/1.0 101') {
@@ -144,9 +145,9 @@ fn (mut ws Client) check_handshake_response(handshake_response, seckey string) ?
 				ws.flags << .has_connection
 			}
 			'Sec-WebSocket-Accept', 'sec-websocket-accept' {
-				ws.logger.debug('seckey: $seckey')
+				ws.debug_log('seckey: $seckey')
 				challenge := create_key_challenge_response(seckey)?
-				ws.logger.debug('challenge: $challenge, response: ${keys[1]}')
+				ws.debug_log('challenge: $challenge, response: ${keys[1]}')
 				if keys[1].trim_space() != challenge {
 					return error('handshake_handler: Sec-WebSocket-Accept header does not match computed sha1/base64 response.')
 				}

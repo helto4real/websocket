@@ -1,11 +1,16 @@
 module main
 
-import websocket
 import time
+import os
+import websocket
 
-struct TestRef {
-	count	int
+fn main() {
+	go start_server()
+	go start_client()
+	println('press enter to quit...')
+	os.get_line()
 }
+
 fn start_server()? {
 	mut s := websocket.new_server(30000, '' ) {
 	}
@@ -19,16 +24,19 @@ fn start_server()? {
 	})?
 
 	s.on_message(fn (mut ws websocket.Client, msg &websocket.Message)? {
-		println('client ($ws.id) sent: opcode: $msg.opcode, payload: $msg.payload')
+		println('client ($ws.id) got message: opcode: $msg.opcode, payload: ${string(msg.payload, msg.payload.len)}')
 	})
-	s.listen()
 
-	println("ENDING SERVER")
+	s.on_close(fn (mut ws &websocket.Client, code int, reason string)? {
+		println('client ($ws.id) closed connection')
+	})
+
+	s.listen() or {
+		println('error on server listen: $err')
+	}
 }
 
-fn main() {
-	go start_server()
-
+fn start_client()? {
 	mut ws := websocket.new_client('ws://localhost:30000')?
 	// mut ws := websocket.new_client('wss://echo.websocket.org:443')?
 
@@ -54,21 +62,30 @@ fn main() {
 
 	// you can add any pointer reference to use in callback
 	// t := TestRef{count: 10}
-	// ws.on_message_ref(fn (mut ws websocket.Client, msg &websocket.Message, t &TestRef)? {
-	// 	// println('type: $msg.opcode payload:\n$msg.payload ref: $t')
-	// }, &t)
+	// ws.on_message_ref(fn (mut ws websocket.Client, msg &websocket.Message, r &SomeRef)? {
+	// 	// println('type: $msg.opcode payload:\n$msg.payload ref: $r')
+	// }, &r)
 
-	ws.connect()?
-	go write_echo(mut ws)
-	ws.listen()?
+	ws.connect() or {
+		println('error on connect: $err')
+	}
+	go write_echo(mut ws) or {
+		println('error on write_echo $err')
+	}
+
+	ws.listen() or {
+		println('error on listen $err')
+	}
 }
-
-fn write_echo(mut ws websocket.Client) {
-	for i:=0; ; i++ {
+fn write_echo(mut ws websocket.Client)? {
+	for i:=0; i<3 ; i++ {
 		// Server will send pings every 30 seconds
 		ws.write('echo this!'.bytes(), .text_frame) or {
-			panic(err)
+			println('panicing writing $err')
 		}
 		time.sleep_ms(1000)
+	}
+	ws.close(1000, "normal") or {
+		println('panicing $err')
 	}
 }

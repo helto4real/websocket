@@ -78,6 +78,22 @@ pub fn (mut s Server) on_message_ref(fun SocketMessageFn2, ref voidptr) {
 	}
 }
 
+// on_close, register a callback on closed socket
+pub fn (mut s Server) on_close(fun SocketCloseFn) {
+	s.close_callbacks << CloseEventHandler{
+		handler: fun
+	}
+}
+
+// on_close_ref, register a callback on closed socket and provide a reference
+pub fn (mut s Server) on_close_ref(fun SocketCloseFn2, ref voidptr) {
+	s.close_callbacks << CloseEventHandler{
+		handler2: fun
+		ref: ref
+		is_ref: true
+	}
+}
+
 // on_message, register a callback on new messages
 pub fn (mut ws Client) on_message(fun SocketMessageFn) {
 	ws.message_callbacks << MessageEventHandler{
@@ -143,7 +159,7 @@ pub fn (mut ws Client) on_close_ref(fun SocketCloseFn2, ref voidptr) {
 }
 
 fn (mut ws Client) send_message_event(mut msg Message) ? {
-	ws.logger.debug('sending on_message event')
+	ws.debug_log('sending on_message event')
 	for ev_handler in ws.message_callbacks {
 		if !ev_handler.is_ref {
 			ev_handler.handler(ws, msg)
@@ -155,7 +171,7 @@ fn (mut ws Client) send_message_event(mut msg Message) ? {
 }
 
 fn (mut ws Client) send_error_event(err string) ? {
-	ws.logger.debug('sending on_error event')
+	ws.debug_log('sending on_error event')
 	for ev_handler in ws.error_callbacks {
 		if !ev_handler.is_ref {
 			ev_handler.handler(mut ws, err)
@@ -167,7 +183,7 @@ fn (mut ws Client) send_error_event(err string) ? {
 }
 
 fn (mut ws Client) send_close_event(code int, reason string) ? {
-	ws.logger.debug('sending on_close event')
+	ws.debug_log('sending on_close event')
 	for ev_handler in ws.close_callbacks {
 		if !ev_handler.is_ref {
 			ev_handler.handler(mut ws, code, reason)
@@ -179,7 +195,7 @@ fn (mut ws Client) send_close_event(code int, reason string) ? {
 }
 
 fn (mut ws Client) send_open_event() ? {
-	ws.logger.debug('sending on_open event')
+	ws.debug_log('sending on_open event')
 	for ev_handler in ws.open_callbacks {
 		if !ev_handler.is_ref {
 			ev_handler.handler(mut ws)

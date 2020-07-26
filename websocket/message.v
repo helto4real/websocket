@@ -33,7 +33,6 @@ const (
 // validate_client, validate client frame rules from RFC6455
 pub fn (mut ws Client) validate_frame(frame &Frame) ? {
 	if frame.rsv1 || frame.rsv2 || frame.rsv3 {
-		ws.logger.error('server($ws.is_server)\n$frame')
 		ws.close(1002, 'rsv cannot be other than 0, not negotiated')
 		return error('rsv cannot be other than 0, not negotiated')
 	}
@@ -59,8 +58,8 @@ pub fn (mut ws Client) validate_frame(frame &Frame) ? {
 		}
 	}
 	if frame.fin == false && ws.fragments.len == 0 && frame.opcode == .continuation {
-		ws.close(1002, 'unexecpected continuation, there are no frames to continue')?
-		return error('unexecpected continuation, there are no frames to continue')
+		ws.close(1002, 'unexecpected continuation, there are no frames to continue, $frame')?
+		return error('unexecpected continuation, there are no frames to continue, $frame')
 	}
 	return none
 }
@@ -115,7 +114,7 @@ fn (mut ws Client) validate_utf_8(opcode OPCode, payload []byte) ? {
 pub fn (mut ws Client) read_next_message() ?&Message {
 	for {
 		frame := ws.parse_frame_header()?
-		ws.logger.debug('server($ws.is_server) frame:\n$frame')
+		ws.debug_log('read_next_message: frame\n$frame')
 		ws.validate_frame(&frame)?
 		mut frame_payload := ws.read_payload(frame.payload_len)?
 		if frame.has_mask {
@@ -277,7 +276,7 @@ pub fn (mut ws Client) parse_frame_header() ?Frame {
 			return frame
 		}
 	}
-	return frame
+	return none
 }
 
 [inline]
