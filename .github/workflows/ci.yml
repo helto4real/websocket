@@ -12,9 +12,12 @@ jobs:
           - name: Checkout
             uses: actions/checkout@v2
     
-          - name: Build V
+          - name: Install dependencies
             run: |
-              v install emily33901.net && v examples/ping.v
+              v install emily33901.net
+          - name: Build 
+            run: |
+              v examples/ping.v
         #   - name: Test V fixed tests
         #     run: |
         #       v test-fixed
