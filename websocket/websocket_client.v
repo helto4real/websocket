@@ -49,7 +49,6 @@ enum Flag {
 // Messages should be sent only on state .open
 enum State {
 	connecting = 0
-	connected
 	open
 	closing
 	closed
@@ -90,16 +89,12 @@ pub fn new_client(address string)? &Client {
 // connect, connects and do handshake procedure with remote server
 pub fn (mut ws Client) connect() ? {
 	ws.assert_not_connected()?
-
 	ws.set_state(.connecting)
 	ws.logger.info('connecting to host $ws.uri')
 
 	ws.conn = ws.dial_socket()?
-	ws.set_state(.connected)
-
 	ws.handshake()?
 	ws.set_state(.open)
-
 	ws.logger.info('successfully connected to host $ws.uri')
 
 	ws.send_open_event() or {
@@ -437,7 +432,6 @@ fn (mut ws Client) set_state(state State) {
 [inline]
 fn (ws Client) assert_not_connected()? {
 	match ws.state {
-		.connected { return error('connect: websocket already connected') }
 		.connecting { return error('connect: websocket is connecting') }
 		.open { return error('connect: websocket already open') }
 		else {}
