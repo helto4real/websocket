@@ -29,7 +29,7 @@ fn start_server() ? {
 	})?
 	s.on_message(fn (mut ws websocket.Client, msg &websocket.Message) ? {
 		payload := if msg.payload.len == 0 { '' } else { string(msg.payload) }
-		ws.println('client ($ws.id) got message: opcode: $msg.opcode, payload: $payload')
+		println('client ($ws.id) got message: opcode: $msg.opcode, payload: $payload')
 	})
 	s.on_close(fn (mut ws websocket.Client, code int, reason string) ? {
 		// println('client ($ws.id) closed connection')
@@ -92,6 +92,7 @@ fn start_client_disconnect() ? {
 	// use on_message_ref if you want to send any reference object
 	ws.on_message(fn (mut ws websocket.Client, msg &websocket.Message) ? {
 		println('client got type: $msg.opcode payload:\n$msg.payload')
+		ws.close(1000, 'close')
 	})
 	// you can add any pointer reference to use in callback
 	// t := TestRef{count: 10}
