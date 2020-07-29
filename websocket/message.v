@@ -14,15 +14,15 @@ struct Fragment {
 
 struct Frame {
 mut:
-	header_len  u64 = u64(2)
-	frame_size  u64 = u64(2)
+	header_len  int = 2
+	frame_size  int = 2
 	fin         bool
 	rsv1        bool
 	rsv2        bool
 	rsv3        bool
 	opcode      OPCode
 	has_mask    bool
-	payload_len u64
+	payload_len int
 	masking_key []byte = []byte{len: 4}
 }
 
@@ -222,7 +222,7 @@ pub fn (mut ws Client) parse_frame_header() ?Frame {
 			frame.rsv3 = (buffer[0] & 0x10) == 0x10
 			frame.opcode = OPCode(int(buffer[0] & 0x7F))
 			frame.has_mask = (buffer[1] & 0x80) == 0x80
-			frame.payload_len = u64(buffer[1] & 0x7F)
+			frame.payload_len = buffer[1] & 0x7F
 			// if has mask set the byte postition where mask ends
 			if frame.has_mask {
 				mask_end_byte = if frame.payload_len < 126 {
@@ -236,7 +236,7 @@ pub fn (mut ws Client) parse_frame_header() ?Frame {
 				} // Impossible
 			}
 			frame.payload_len = frame.payload_len
-			frame.frame_size = u64(frame.header_len) + frame.payload_len
+			frame.frame_size = frame.header_len + frame.payload_len
 			if !frame.has_mask && frame.payload_len < 126 {
 				return frame
 			}
@@ -246,7 +246,7 @@ pub fn (mut ws Client) parse_frame_header() ?Frame {
 			frame.payload_len = 0
 			frame.payload_len |= buffer[2] << 8
 			frame.payload_len |= buffer[3] << 0
-			frame.frame_size = u64(frame.header_len) + frame.payload_len
+			frame.frame_size = frame.header_len + frame.payload_len
 			if !frame.has_mask {
 				return frame
 			}
@@ -254,14 +254,14 @@ pub fn (mut ws Client) parse_frame_header() ?Frame {
 		if frame.payload_len == 127 && buffer.len == u64(extended_payload64_end_byte) {
 			frame.header_len += 8 // TODO Not sure...
 			frame.payload_len = 0
-			frame.payload_len |= u64(buffer[2]) << 56
-			frame.payload_len |= u64(buffer[3]) << 48
-			frame.payload_len |= u64(buffer[4]) << 40
-			frame.payload_len |= u64(buffer[5]) << 32
-			frame.payload_len |= u64(buffer[6]) << 24
-			frame.payload_len |= u64(buffer[7]) << 16
-			frame.payload_len |= u64(buffer[8]) << 8
-			frame.payload_len |= u64(buffer[9]) << 0
+			frame.payload_len |= buffer[2] << 56
+			frame.payload_len |= buffer[3] << 48
+			frame.payload_len |= buffer[4] << 40
+			frame.payload_len |= buffer[5] << 32
+			frame.payload_len |= buffer[6] << 24
+			frame.payload_len |= buffer[7] << 16
+			frame.payload_len |= buffer[8] << 8
+			frame.payload_len |= buffer[9] << 0
 			if !frame.has_mask {
 				return frame
 			}
