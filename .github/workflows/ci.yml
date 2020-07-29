@@ -14,7 +14,7 @@ jobs:
     
           - name: Build V
             run: |
-              echo v examples/ping.v
+              v examples/ping.v
         #   - name: Test V fixed tests
         #     run: |
         #       v test-fixed
