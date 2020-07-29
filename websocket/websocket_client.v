@@ -87,9 +87,6 @@ pub fn new_client(address string)? &Client {
 	}
 }
 
-
-
-
 // connect, connects and do handshake procedure with remote server
 pub fn (mut ws Client) connect() ? {
 	ws.assert_not_connected()?
@@ -224,6 +221,12 @@ fn (mut ws Client) manage_clean_close() ? {
 // 		 ping response will be pushed to message callback
 pub fn (mut ws Client) ping() ? {
 	ws.send_control_frame(.ping, 'PING', []) ?
+}
+
+// pong, sends pog message to server, 
+// 		 pongs are normally automatically sent back to server
+pub fn (mut ws Client) pong() ? {
+	ws.send_control_frame(.pong, 'PONG', []) ?
 }
 
 // write, writes a byte array with a websocket messagetype
