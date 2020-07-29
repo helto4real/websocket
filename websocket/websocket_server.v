@@ -66,12 +66,11 @@ fn (mut s Server) close() {
 
 // Todo: make thread safe
 fn (mut s Server) handle_ping() {
-	mut unix_time := time.now().unix
 	mut clients_to_remove := []&ServerClient{}
 	for s.state == .open {
 		time.sleep(s.ping_interval)
-		for x, _ in s.clients {
-			mut c := s.clients[x]
+		for x, cli in s.clients {
+			mut c := cli
 			if c.client.state == .open {
 				c.client.ping() or {
 					s.logger.debug('server-> error sending ping to client')

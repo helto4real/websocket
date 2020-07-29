@@ -6,14 +6,17 @@ import websocket
 
 fn main() {
 	go start_server()
+	time.sleep_ms(100)
+	go start_client()
 	go start_client()
 	println('press enter to quit...')
 	os.get_line()
 }
 
 fn start_server()? {
-	mut s := websocket.new_server(30000, '' ) {
-	}
+	mut s := websocket.new_server(30000, '' ) { }
+	// Make that in execution test time give time to execute at least one time
+	s.ping_interval = 1
 	s.on_connect(fn (mut s &websocket.ServerClient) ?bool {
 		// Here you can look att the client info and accept or not accept
 		// just returning a true/false
@@ -24,15 +27,16 @@ fn start_server()? {
 	})?
 
 	s.on_message(fn (mut ws websocket.Client, msg &websocket.Message)? {
-		println('client ($ws.id) got message: opcode: $msg.opcode, payload: ${string(msg.payload, msg.payload.len)}')
+		payload := if msg.payload.len == 0 { '' } else { string(msg.payload, msg.payload.len) }
+		println('client ($ws.id) got message: opcode: $msg.opcode, payload: $payload')
 	})
 
 	s.on_close(fn (mut ws &websocket.Client, code int, reason string)? {
-		println('client ($ws.id) closed connection')
+		//println('client ($ws.id) closed connection')
 	})
 
 	s.listen() or {
-		println('error on server listen: $err')
+		//println('error on server listen: $err')
 	}
 }
 
@@ -78,14 +82,15 @@ fn start_client()? {
 	}
 }
 fn write_echo(mut ws websocket.Client)? {
-	for i:=0; i<3 ; i++ {
+	for i:=0; i <= 3 ; i++ {
 		// Server will send pings every 30 seconds
 		ws.write('echo this!'.bytes(), .text_frame) or {
 			println('panicing writing $err')
 		}
-		time.sleep_ms(1000)
+		time.sleep_ms(100)
 	}
+	/*
 	ws.close(1000, "normal") or {
 		println('panicing $err')
-	}
+	}*/
 }
