@@ -1,0 +1,20 @@
+name: CI
+on: [push, pull_request]
+jobs:
+    build:
+        name: CI
+        runs-on: ubuntu-latest
+        container:
+          image: thevlang/vlang:buster-dev
+          volumes:
+            - ${{github.workspace}}:/src
+        steps:
+          - name: Checkout
+            uses: actions/checkout@v2
+    
+          - name: Build V
+            run: |
+              echo v examples/ping.v
+        #   - name: Test V fixed tests
+        #     run: |
+        #       v test-fixed
