@@ -28,7 +28,7 @@ mut:
 	close_callbacks	  []CloseEventHandler
 pub:
 	is_ssl            bool
-	url               string
+	uri               Uri
 	id 				  string
 pub mut:
 	conn              net.TcpConn
@@ -73,49 +73,40 @@ pub enum OPCode {
 }
 
 // new_client, instance a new websocket client
-pub fn new_client(address string) ?&Client {
+pub fn new_client(address string)? &Client {
+	uri := parse_uri(address)?
 	return &Client{
 		is_server: false
 		sslctx: 0
 		ssl: 0
 		is_ssl: address.starts_with('wss')
 		logger: &log.Log{level: .info}
-		url: address
+		uri: uri
 		state: .closed
 		id: rand.uuid_v4()
 	}
 }
 
+
+
+
 // connect, connects and do handshake procedure with remote server
 pub fn (mut ws Client) connect() ? {
-	match ws.state {
-		.connected { return error('connect: websocket already connected') }
-		.connecting { return error('connect: websocket already connecting') }
-		.open { return error('connect: websocket already open') }
-		else {}
-	}
+	ws.assert_not_connected()?
+
 	ws.set_state(.connecting)
-	ws.logger.info('connecting to host $ws.url')
-	uri := parse_uri(ws.url)?
-	ws.conn = net.dial_tcp('$uri.hostname:$uri.port')?
-	optval := int(1)
-	ws.conn.sock.set_option_int(.keep_alive, optval)
-	// Todo: support setting own timeouts
-	ws.conn.set_read_timeout(3 * time.second)
-	ws.conn.set_write_timeout(3 * time.second)
-	if ws.is_ssl {
-		ws.connect_ssl()?
-	}
+	ws.logger.info('connecting to host $ws.uri')
+
+	ws.conn = ws.dial_socket()?
 	ws.set_state(.connected)
-	ws.handshake(uri)?
+
+	ws.handshake()?
 	ws.set_state(.open)
-	ws.logger.info('successfully connected to host $ws.url')
+
+	ws.logger.info('successfully connected to host $ws.uri')
+
 	ws.send_open_event() or {
-		ws.logger.error('error in open event callback: $err')
-		if ws.panic_on_callback {
-			panic(err)
-		}
-		return none
+		return ws.handle_callback_error('error in open event callback: $err')
 	}
 	return none
 }
@@ -417,13 +408,14 @@ fn (mut ws Client) send_control_frame(code OPCode, frame_typ string, payload []b
 
 // parse_uri, parses the url string to it's components
 // todo: support not using port to default ones
-fn parse_uri(url string) ?&Uri {
+fn parse_uri(url string)? &Uri {
 	u := urllib.parse(url) or {
 		return error(err)
 	}
 	v := u.request_uri().split('?')
 	querystring := if v.len > 1 { '?' + v[1] } else { '' }
 	return &Uri{
+		url: url
 		hostname: u.hostname()
 		port: u.port()
 		resource: v[0]
@@ -437,6 +429,17 @@ fn (mut ws Client) set_state(state State) {
 	ws.mtx.m_lock()
 	ws.state = state
 	ws.mtx.unlock()
+}
+
+[inline]
+fn (ws Client) assert_not_connected()? {
+	match ws.state {
+		.connected { return error('connect: websocket already connected') }
+		.connecting { return error('connect: websocket is connecting') }
+		.open { return error('connect: websocket already open') }
+		else {}
+	}
+	return none
 }
 
 [inline]

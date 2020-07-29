@@ -42,3 +42,11 @@ pub fn wrap_error(error_code int) ? {
 		return error_with_code('net: socket error: $error_code', error_code)
 	}
 }
+
+fn (mut ws Client) handle_callback_error(error string)? {
+	ws.logger.error(error)
+	if ws.panic_on_callback {
+		panic(error)
+	}
+	return none
+}

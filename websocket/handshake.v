@@ -3,10 +3,10 @@ module websocket
 import encoding.base64
 
 // handshake manage the handshake part of connecting
-fn (mut ws Client) handshake(uri Uri) ? {
+fn (mut ws Client) handshake() ? {
 	nonce := get_nonce(ws.nonce_size)
 	seckey := base64.encode(nonce)
-	handshake := 'GET $uri.resource$uri.querystring HTTP/1.1\r\nHost: $uri.hostname:$uri.port\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: $seckey\r\nSec-WebSocket-Version: 13\r\n\r\n'
+	handshake := 'GET $ws.uri.resource$ws.uri.querystring HTTP/1.1\r\nHost: $ws.uri.hostname:$ws.uri.port\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: $seckey\r\nSec-WebSocket-Version: 13\r\n\r\n'
 	handshake_bytes := handshake.bytes()
 	ws.debug_log('sending handshake: $handshake')
 	ws.socket_write(handshake_bytes)?
