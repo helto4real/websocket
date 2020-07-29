@@ -22,7 +22,7 @@ pub:
 	is_ssl bool = false
 
 pub mut:
-	ping_interval 	int = 30
+	ping_interval 	int = 30 // in seconds
 	state    		State
 }
 
@@ -67,44 +67,35 @@ fn (mut s Server) close() {
 // Todo: make thread safe
 fn (mut s Server) handle_ping() {
 	mut unix_time := time.now().unix
+	mut clients_to_remove := []&ServerClient{}
 	for s.state == .open {
-		time.sleep_ms(100)
-		now := time.now().unix
-		diff := now - unix_time
-		mut clients_to_remove := []&ServerClient{}
-		if diff >= s.ping_interval {
-			unix_time = now
-			for x, _ in s.clients {
-					mut c := s.clients[x]
-					if c.client.state == .open {
-						c.client.ping() or {
-							s.logger.debug('server-> error sending ping to client')
-							// todo fix better close message
-							c.client.close(1000, 'ping send error') or {
-								// we want to continue even if error
-								continue
-							}
-							clients_to_remove << c
-						}
+		time.sleep(s.ping_interval)
+		for x, _ in s.clients {
+			mut c := s.clients[x]
+			if c.client.state == .open {
+				c.client.ping() or {
+					s.logger.debug('server-> error sending ping to client')
+					// todo fix better close message, search the standard
+						c.client.close(1002, 'Clossing connection: ping send error') or {
+						// we want to continue even if error
+						continue
 					}
-				
-			}
-			for x, _ in s.clients {
-				mut c := s.clients[x]
-				if c.client.state == .open && (time.now().unix - c.client.last_pong_ut) > s.ping_interval*2 {
+					clients_to_remove << c
+				}
+				if (time.now().unix - c.client.last_pong_ut) > s.ping_interval*2 {
 					clients_to_remove << c
 					c.client.close(1000, 'no pong received') or {
 						continue
 					}	
 				}
 			}
-			for cr in clients_to_remove {
-				if s.clients.exists(cr.client.id) {
-					s.clients.delete(cr.client.id)
-				}
+		}
+		for cr in clients_to_remove {
+			if s.clients.exists(cr.client.id) {
+				s.clients.delete(cr.client.id)
 			}
 		}
-
+		clients_to_remove = []&ServerClient{}
 	}
 }
 
