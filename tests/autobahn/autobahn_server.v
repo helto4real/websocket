@@ -1,20 +1,17 @@
-// use this test to test the websocket client in the autobahn test
+// use this to test websocket server to the autobahn test
 
 module main
 
 import websocket
 
 fn main() {
-	for i in 1 .. 303 {
-		println('\ncase: $i')
-		handle_case(i) or {
-			println('error should be ok: $err')
-		}
-	}
+	mut s := websocket.new_server(9002, '/')
+	s.on_message(on_message)
+	s.listen()
 }
 
 fn handle_case(case_nr int) ? {
-	uri := 'ws://localhost:9001/runCase?case=$case_nr&agent=v-client'
+	uri := 'ws://localhost:9002/runCase?case=$case_nr&agent=v-client'
 	mut ws := websocket.new_client(uri)?
 	ws.on_message(on_message)
 	ws.connect()?

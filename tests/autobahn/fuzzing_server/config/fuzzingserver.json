@@ -5,6 +5,7 @@
         "*"
     ],
     "exclude-cases": [
+        "12.*",
         "13.*"
     ],
     "exclude-agent-cases": {}

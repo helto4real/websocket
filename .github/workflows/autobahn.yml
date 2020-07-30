@@ -4,32 +4,26 @@ jobs:
     build:
         name: Autobahn integrations tests
         runs-on: ubuntu-latest
-        env:
-          AUTOBAHN_CONFIG: ${{github.workspace}}/tests/autobahn/config/
-        # container:                             
-        #   image: thevlang/vlang:buster-dev
-        #   volumes:
-        #     - ${{github.workspace}}:/src
         steps:
           - name: Checkout
             uses: actions/checkout@v2
-        #   - name: Pring env 
-        #     run: env
-          - name: Fix 
-            run: mkdir /opt/config && cp -f ${{github.workspace}}/tests/autobahn/config/* /opt/config
-          - name: Fix2
-            run: ls /opt/config
-        #   - name: Init autobahn services
-        #     run: docker run -v /opt/config:/config -p 9001:9001 crossbario/autobahn-testsuite
-          - name: Init autobahn services
-            run: docker-compose -f ${{github.workspace}}/tests/autobahn/docker-compose.yml up
-            
-        #   - name: Install dependencies
-        #     run: |
-        #       v install emily33901.net
-        #   - name: Build 
-        #     run: |
-        #       v examples/ping.v
-        #   - name: Test V fixed tests
-        #     run: |
-        #       v test-fixed
+        ## Following are for running locally with https://github.com/nektos/act
+        #   - name: Down autobahn services
+        #     run: docker-compose -f ${{github.workspace}}/tests/autobahn/docker-compose.yml down
+        #   - name: Build autobahn services
+        #     run: docker-compose -f ${{github.workspace}}/tests/autobahn/docker-compose.yml build
+          - name: Run autobahn services
+            run: docker-compose -f ${{github.workspace}}/tests/autobahn/docker-compose.yml up -d
+          - name: Build client test
+            run: docker exec -ti autobahn_client "v" "/src/tests/autobahn/autobahn_client.v" 
+          - name: Run client test
+            run: docker exec -ti autobahn_client "/src/tests/autobahn/autobahn_client"  
+          - name: Run server test
+            run: docker exec -ti autobahn_server "wstest" "-m" "fuzzingclient" "-s" "/config/fuzzingclient.json" 
+          - name: Copy reports
+            run: docker cp autobahn_server:/config ${{github.workspace}}/config
+          - name: Publish report 
+            uses: actions/upload-artifact@v2
+            with:
+                name: reports
+                path: ${{github.workspace}}/config
