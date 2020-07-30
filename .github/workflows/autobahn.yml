@@ -1,0 +1,39 @@
+name: Autobahn test
+on: [push]
+jobs:
+    build:
+        name: Autobahn integrations tests
+        runs-on: ubuntu-latest
+        steps:
+          - name: Checkout
+            uses: actions/checkout@v2
+        ## Following are for running locally with https://github.com/nektos/act
+        #   - name: Down autobahn services
+        #     run: docker-compose -f ${{github.workspace}}/tests/autobahn/docker-compose.yml down
+        #   - name: Build autobahn services
+        #     run: docker-compose -f ${{github.workspace}}/tests/autobahn/docker-compose.yml build
+          - name: Run autobahn services
+            run: docker-compose -f ${{github.workspace}}/tests/autobahn/docker-compose.yml up -d
+          - name: Build client test
+            run: docker exec autobahn_client "v" "/src/tests/autobahn/autobahn_client.v" 
+          - name: Run client test
+            run: docker exec autobahn_client "/src/tests/autobahn/autobahn_client"  
+          - name: Run server test
+            run: docker exec autobahn_server "wstest" "-m" "fuzzingclient" "-s" "/config/fuzzingclient.json" 
+          - name: Copy reports
+            run: docker cp autobahn_server:/reports ${{github.workspace}}/reports
+          - name: Publish all reports
+            uses: actions/upload-artifact@v2
+            with:
+                name: full report
+                path: ${{github.workspace}}/reports
+          - name: Publish report client
+            uses: actions/upload-artifact@v2
+            with:
+                name: client
+                path: ${{github.workspace}}/reports/clients/index.html
+          - name: Publish report server
+            uses: actions/upload-artifact@v2
+            with:
+                name: server
+                path: ${{github.workspace}}/reports/servers/index.html
