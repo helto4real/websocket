@@ -18,7 +18,7 @@ jobs:
         #   - name: Init autobahn services
         #     run: docker-compose -f ${{github.workspace}}/tests/autobahn/docker-compose.yml up
           - name: Init autobahn services
-            run: docker run -v ${{github.workspace}}/tests/autobahn/config/:/config -p 9001:9001 crossbario/autobahn-testsuite
+            run: docker run -d -v ${{github.workspace}}/tests/autobahn/config:/config -p 9001:9001 crossbario/autobahn-testsuite
             
         #   - name: Install dependencies
         #     run: |
