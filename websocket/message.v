@@ -1,5 +1,7 @@
 module websocket
 
+import encoding.utf8
+
 const (
 	header_len_offset           = 2
 	buffer_size                 = 256
@@ -101,13 +103,12 @@ fn (mut ws Client) read_payload(payload_len int) ?[]byte {
 // validate_utf_8, validates payload for valid utf encoding
 // todo: support fail fast utf errors for strict autobahn conformance
 fn (mut ws Client) validate_utf_8(opcode OPCode, payload []byte) ? {
-	if opcode in [.text_frame, .close] && !utf8_validate(payload) {
+	if opcode in [.text_frame, .close] && !utf8.validate(payload.data, payload.len) {
 		ws.logger.error('malformed utf8 payload, payload len: ($payload.len)')
 		// ws.send_error_event('Recieved malformed utf8.')
 		ws.close(1007, 'malformed utf8 payload')
 		return error('malformed utf8 payload')
 	}
-	return none
 }
 
 // read_next_message reads 1 to n frames to compose a message
