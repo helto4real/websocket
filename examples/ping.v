@@ -15,8 +15,7 @@ fn main() {
 
 fn start_server() ? {
 	mut s := websocket.new_server(30000, '')
-	{
-	}
+
 	// Make that in execution test time give time to execute at least one time
 	s.ping_interval = 1
 	s.on_connect(fn (mut s websocket.ServerClient) ?bool {

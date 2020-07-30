@@ -22,7 +22,7 @@ fn on_message(mut ws websocket.Client, msg &websocket.Message)?  {
 	// autobahn tests expects to send same message back
 	if msg.opcode == .pong {
 		// We just wanna pass text and binary message back to autobahn
-		return none
+		return
 	}
 	ws.write(msg.payload, msg.opcode) or {
 		panic(err)
