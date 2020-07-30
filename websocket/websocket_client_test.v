@@ -9,7 +9,7 @@ fn test_ws()? {
 
 fn ws_test(uri string)? {
 	println('connecting to $uri ...')
-	mut ws := websocket.new_client('ws://localhost:30000')?
+	mut ws := websocket.new_client(uri)?
 	ws.on_open(fn (mut ws websocket.Client) ? {
 		println('open!')
 		ws.pong()
