@@ -85,10 +85,10 @@ fn (mut ws Client) socket_write(bytes []byte) ? {
 }
 
 // shutdown_socket, proper shutdown make PR in Emeliy repo
-fn (mut ws Client) shutdown_socket() ? {
+fn (mut ws Client) shutdown_socket()? {
 	ws.debug_log('shutting down socket')
 	if ws.ssl != 0 {
-		ws.shutdown_ssl()?
+		ws.shutdown_ssl()
 	} else {
 		ws.conn.close()?
 	}
@@ -107,7 +107,7 @@ fn (mut ws Client) dial_socket()? net.TcpConn {
 	if ws.is_ssl {
 		ws.connect_ssl()?
 	}
-	
+
 	return tcp_socket
 }
 

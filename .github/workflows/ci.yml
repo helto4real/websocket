@@ -15,6 +15,9 @@ jobs:
           - name: Install dependencies
             run: |
               v install emily33901.net
+          - name: Tests 
+            run: |
+              v test .
           - name: Build 
             run: |
               v examples/ping.v
