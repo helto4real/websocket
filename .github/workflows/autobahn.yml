@@ -4,15 +4,21 @@ jobs:
     build:
         name: Autobahn integrations tests
         runs-on: ubuntu-latest
-        # container:
+        env:
+          AUTOBAHN_CONFIG: ${{github.workspace}}/tests/autobahn/config/
+        # container:                             
         #   image: thevlang/vlang:buster-dev
         #   volumes:
         #     - ${{github.workspace}}:/src
         steps:
           - name: Checkout
             uses: actions/checkout@v2
+        #   - name: Pring env 
+        #     run: env
+        #   - name: Init autobahn services
+        #     run: docker-compose -f ${{github.workspace}}/tests/autobahn/docker-compose.yml up
           - name: Init autobahn services
-            run: docker-compose up -f ${{github.workspace}}/tests/autobahn/docker-compose.yml -d -e AUTOBAHN_CONFIG=${{github.workspace}}/tests/autobahn/config
+            run: docker run -v ${{github.workspace}}/tests/autobahn/config/:/config -p 9001:9001 crossbario/autobahn-testsuite
             
         #   - name: Install dependencies
         #     run: |
