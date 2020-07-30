@@ -277,7 +277,6 @@ pub fn (mut ws Client) parse_frame_header() ?Frame {
 			return frame
 		}
 	}
-	return none
 }
 
 [inline]

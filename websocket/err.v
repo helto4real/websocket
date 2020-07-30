@@ -48,5 +48,4 @@ fn (mut ws Client) handle_callback_error(error string)? {
 	if ws.panic_on_callback {
 		panic(error)
 	}
-	return none
 }
