@@ -7,7 +7,7 @@ services:
     ports:
       - "9001:9001"
     volumes: 
-      - ${AUTOBAHN_CONFIG}:/config
+      - /opt/config:/config
 #   redis:
 #     container_name: redis-backend
 #     image: "redis:alpine"

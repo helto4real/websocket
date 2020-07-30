@@ -15,12 +15,14 @@ jobs:
             uses: actions/checkout@v2
         #   - name: Pring env 
         #     run: env
-        #   - name: Init autobahn services
-        #     run: docker-compose -f ${{github.workspace}}/tests/autobahn/docker-compose.yml up
           - name: Fix 
             run: mkdir /opt/config && cp -f ${{github.workspace}}/tests/autobahn/config/* /opt/config
+          - name: Fix2
+            run: ls /opt/config
+        #   - name: Init autobahn services
+        #     run: docker run -v /opt/config:/config -p 9001:9001 crossbario/autobahn-testsuite
           - name: Init autobahn services
-            run: docker run -v /opt/config:/config -p 9001:9001 crossbario/autobahn-testsuite
+            run: docker-compose -f ${{github.workspace}}/tests/autobahn/docker-compose.yml up
             
         #   - name: Install dependencies
         #     run: |
