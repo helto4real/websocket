@@ -33,6 +33,11 @@ fn (mut ws Client) socket_read_into(mut buffer []byte) ?int {
 
 // socket_write, writes the whole byte array provided to the socket
 fn (mut ws Client) socket_write(bytes []byte) ? {
+	defer {
+		unsafe {
+			free(bytes)
+		}
+	}
 	if ws.state == .closed || ws.conn.sock.handle <= 1 {
 		ws.debug_log('write: Socket allready closed')
 		return error('Socket allready closed')
@@ -42,32 +47,36 @@ fn (mut ws Client) socket_write(bytes []byte) ? {
 		ws.write_lock.unlock()
 	}
 	if ws.is_ssl {
-		unsafe {
-			mut ptr_base := byteptr(bytes.data)
-			mut total_sent := 0
-			for total_sent < bytes.len {
-				ptr := ptr_base + total_sent
-				remaining := bytes.len - total_sent
-				mut sent := C.SSL_write(ws.ssl, ptr, remaining)
-				if sent < 0 {
-					code := error_code()
-					match code {
-						error_ewouldblock {
-							ws.conn.wait_for_write()
-							continue
-						}
-						else {
-							wrap_error(code)?
-						}
+		mut ptr_base := byteptr(bytes.data)
+		mut total_sent := 0
+		for total_sent < bytes.len {
+			ptr := unsafe{ptr_base + total_sent}
+			remaining := bytes.len - total_sent
+			mut sent := C.SSL_write(ws.ssl, ptr, remaining)
+			unsafe {
+				free(ptr)
+				free(remaining)
+			}
+			if sent < 0 {
+				code := error_code()
+				match code {
+					error_ewouldblock {
+						ws.conn.wait_for_write()
+						continue
+					}
+					else {
+						wrap_error(code)?
 					}
 				}
-				total_sent += sent
 			}
+			total_sent += sent
+		}
+		unsafe {
+			free(ptr_base)
 		}
 	} else {
 		ws.conn.write(bytes)?
 	}
-	return none
 }
 
 // shutdown_socket, proper shutdown make PR in Emeliy repo
@@ -78,12 +87,10 @@ fn (mut ws Client) shutdown_socket() ? {
 	} else {
 		ws.conn.close()?
 	}
-	return none
 }
 
 // dial_socket, setup socket communication, options and timeouts
 fn (mut ws Client) dial_socket()? net.TcpConn {
-	
 	tcp_socket :=  net.dial_tcp('$ws.uri.hostname:$ws.uri.port')?
 
 	optval := int(1)

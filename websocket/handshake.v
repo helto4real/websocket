@@ -11,6 +11,12 @@ fn (mut ws Client) handshake() ? {
 	ws.debug_log('sending handshake: $handshake')
 	ws.socket_write(handshake_bytes)?
 	ws.read_handshake(seckey)?
+	unsafe {
+		free(nonce)
+		free(seckey)
+		free(handshake)
+		free(handshake_bytes)
+	}
 }
 
 // handshake manage the handshake part of connecting
@@ -19,10 +25,20 @@ fn (mut s Server) handle_server_handshake(mut c Client) ?(string, &ServerClient)
 	max_buffer := 1024
 	mut msg := []byte{cap: max_buffer}
 	mut buffer := []byte{len: 1}
+	defer {
+		unsafe {
+			free(total_bytes_read)
+			free(msg)
+			free(buffer)
+		}
+	}
 	for total_bytes_read < max_buffer {
 		bytes_read := c.socket_read_into(mut buffer)?
 		if bytes_read == 0 {
 			return error('unexpected no response from handshae with the client')
+		}
+		unsafe {
+			free(bytes_read)
 		}
 		total_bytes_read++
 		msg << buffer[0]
@@ -86,18 +102,22 @@ fn (mut s Server) parse_client_handshake(client_handshake string, mut c Client) 
 			}
 		}
 	}
+	defer {
+		unsafe {
+			free(flags)
+		}
+	}
 	if flags.len < 3 {
 		return error('invalid client handshake, $client_handshake')
 	}
+
 	server_handshake := 'HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: $seckey\r\n\r\n'
-	
 	server_client := &ServerClient{
 		resource_name: get_tokens[1]
 		client_key: key
 		client: c
 		server: s
 	}
-
 	return server_handshake, server_client
 }
 

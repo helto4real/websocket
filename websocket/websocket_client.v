@@ -240,6 +240,13 @@ pub fn (mut ws Client) write(bytes []byte, code OPCode) ? {
 	mut header := [`0`].repeat(header_len)
 	header[0] = byte(code) | 0x80
 	mut masking_key := []byte{}
+	defer {
+		unsafe {
+			free(payload_len)
+			free(masking_key)
+			free(header)
+		}
+	}
 	if ws.is_server {
 		if payload_len <= 125 {
 			header[1] = byte(payload_len ) //| 0x80
@@ -293,7 +300,9 @@ pub fn (mut ws Client) write(bytes []byte, code OPCode) ? {
 			ws.close(1009, 'frame too large')?
 			return error('frame too large')
 		}
-
+		unsafe {
+			free(masking_key)
+		}
 	}
 	mut frame_buf := []byte{}
 	frame_buf << header
