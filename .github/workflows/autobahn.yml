@@ -21,7 +21,7 @@ jobs:
           - name: Run server test
             run: docker exec autobahn_server "wstest" "-m" "fuzzingclient" "-s" "/config/fuzzingclient.json" 
           - name: Copy reports
-            run: docker cp autobahn_server:/config ${{github.workspace}}/config
+            run: docker cp autobahn_server:/reports ${{github.workspace}}/reports
           - name: Publish report 
             uses: actions/upload-artifact@v2
             with:
