@@ -6,13 +6,12 @@ const (
 	is_used = openssl.is_used
 )
 
-fn (mut ws Client) shutdown_ssl() ? {
+fn (mut ws Client) shutdown_ssl() {
 	C.SSL_shutdown(ws.ssl)
 	C.SSL_free(ws.ssl)
 	if ws.sslctx != 0 {
 		C.SSL_CTX_free(ws.sslctx)
 	}
-	return none
 }
 
 fn (mut ws Client) connect_ssl() ? {
