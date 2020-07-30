@@ -1,0 +1,13 @@
+version: '3'
+services:
+  web:
+    container_name: autobahn
+    image: crossbario/autobahn-testsuite
+
+    ports:
+      - "9001:9001"
+    volumes: 
+      - ${AUTOBAHN_CONFIG}:/config
+#   redis:
+#     container_name: redis-backend
+#     image: "redis:alpine"

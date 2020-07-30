@@ -1,0 +1,25 @@
+name: CI
+on: [push]
+jobs:
+    build:
+        name: Autobahn integrations tests
+        runs-on: ubuntu-latest
+        # container:
+        #   image: thevlang/vlang:buster-dev
+        #   volumes:
+        #     - ${{github.workspace}}:/src
+        steps:
+          - name: Checkout
+            uses: actions/checkout@v2
+          - name: Init autobahn services
+            run: docker-compose up -f ${{github.workspace}}/tests/autobahn/docker-compose.yml -d -e AUTOBAHN_CONFIG=${{github.workspace}}/tests/autobahn/config
+            
+        #   - name: Install dependencies
+        #     run: |
+        #       v install emily33901.net
+        #   - name: Build 
+        #     run: |
+        #       v examples/ping.v
+        #   - name: Test V fixed tests
+        #     run: |
+        #       v test-fixed
