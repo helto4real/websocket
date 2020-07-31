@@ -7,6 +7,6 @@ COPY ./ /src/
 # COPY tests/autobahn/ws_test/run.sh /run.sh
 # RUN chmod +x /run.sh
 RUN v install emily33901.net
-RUN v -prod -autofree /src/tests/autobahn/autobahn_server.v
+RUN v -autofree /src/tests/autobahn/autobahn_server.v
 RUN chmod +x /src/tests/autobahn/autobahn_server
 ENTRYPOINT [ "/src/tests/autobahn/autobahn_server" ]
