@@ -28,10 +28,6 @@ mut:
 	masking_key []byte = []byte{len: 4}
 }
 
-const (
-	invalid_close_codes = [999, 1004, 1005, 1006, 1014, 1015, 1016, 1100, 2000, 2999, 5000, 65536]
-)
-
 // validate_client, validate client frame rules from RFC6455
 pub fn (mut ws Client) validate_frame(frame &Frame) ? {
 	if frame.rsv1 || frame.rsv2 || frame.rsv3 {
@@ -85,12 +81,17 @@ fn (mut ws Client) read_payload(payload_len int) ?[]byte {
 	mut buffer := []byte{cap: payload_len}
 	mut read_buf := []byte{len: 1}
 	mut bytes_read := 0
+	defer {
+		unsafe {
+			free(read_buf)
+		}
+	}
 	for bytes_read < payload_len {
 		len := ws.socket_read_into(mut read_buf)?
 		if len != 1 {
 			return error('expected read all message, got zero')
 		}
-		bytes_read+=len
+		bytes_read += len
 		buffer << read_buf[0]
 	}
 	if bytes_read != payload_len {
@@ -151,7 +152,7 @@ pub fn (mut ws Client) read_next_message() ?&Message {
 			}
 		}
 		defer {
-			ws.fragments = []
+			ws.fragments.clear()
 		}
 		if is_data_frame(frame.opcode) {
 			ws.close(0, '')?
@@ -203,6 +204,12 @@ pub fn (mut ws Client) parse_frame_header() ?Frame {
 	mut frame := Frame{}
 	mut rbuff := []byte{len: 1}
 	mut mask_end_byte := 0
+	defer {
+		unsafe {
+			free(buffer)
+			free(rbuff)
+		}
+	}
 	for ws.state == .open {
 		// Todo: different error scenarios to make sure we close correctly on error
 		// reader.read_into(mut rbuff) ?

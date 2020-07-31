@@ -12,11 +12,6 @@ interface WebsocketIO {
 fn (mut ws Client) socket_read_into(mut buffer []byte) ?int {
 	if ws.is_ssl {
 		res := C.SSL_read(ws.ssl, buffer.data, buffer.len)
-		defer {
-			unsafe {
-				free(res)
-			}
-		}
 		if res >= 0 {
 			return res
 		}
