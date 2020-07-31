@@ -15,26 +15,8 @@ fn (mut ws Client) handshake() ? {
 
 // handshake manage the handshake part of connecting
 fn (mut s Server) handle_server_handshake(mut c Client) ?(string, &ServerClient) {
-	mut total_bytes_read := 0
-	max_buffer := 1024
-	mut msg := []byte{cap: max_buffer}
-	mut buffer := []byte{len: 1}
-	for total_bytes_read < max_buffer {
-		bytes_read := c.socket_read_into(mut buffer)?
-		if bytes_read == 0 {
-			return error('unexpected no response from handshae with the client')
-		}
-		total_bytes_read++
-		msg << buffer[0]
-		if total_bytes_read > 5 &&
-			msg[total_bytes_read - 1] == `\n` &&
-			msg[total_bytes_read - 2] == `\r` &&
-			msg[total_bytes_read - 3] == `\n` &&
-			msg[total_bytes_read - 4] == `\r` {
-			break
-		}
-	}
-	handshake_response, client := s.parse_client_handshake(string(msg), mut c)?
+	msg := c.read_handshake_str()?
+	handshake_response, client := s.parse_client_handshake(msg, mut c)?
 
 	return handshake_response, client
 }
@@ -101,8 +83,7 @@ fn (mut s Server) parse_client_handshake(client_handshake string, mut c Client) 
 	return server_handshake, server_client
 }
 
-// read_handshake reads the handshake and check if valid
-fn (mut ws Client) read_handshake(seckey string) ? {
+fn (mut ws Client) read_handshake_str() ?string {
 	mut total_bytes_read := 0
 	max_buffer := 1024
 	mut msg := []byte{cap: max_buffer}
@@ -122,7 +103,13 @@ fn (mut ws Client) read_handshake(seckey string) ? {
 			break
 		}
 	}
-	ws.check_handshake_response(string(msg), seckey)?
+	return string(msg)
+}
+
+// read_handshake reads the handshake and check if valid
+fn (mut ws Client) read_handshake(seckey string) ? {
+	msg := ws.read_handshake_str()?
+	ws.check_handshake_response(msg, seckey)?
 }
 
 fn (mut ws Client) check_handshake_response(handshake_response, seckey string) ? {
