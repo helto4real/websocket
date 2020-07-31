@@ -160,8 +160,7 @@ fn (mut s Server) accept_new_client() ?&Client{
 	c := &Client{
 		is_server: true
 		conn: new_conn
-		sslctx: 0
-		ssl : 0
+		ssl_conn: new_ssl_conn()
 		logger: s.logger
 		state: .open
 		last_pong_ut: time.now().unix
