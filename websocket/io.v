@@ -34,7 +34,6 @@ fn (mut ws Client) socket_write(bytes []byte) ? {
 	} else {
 		ws.conn.write(bytes)?
 	}
-	return none
 }
 
 // shutdown_socket, proper shutdown make PR in Emeliy repo
@@ -49,7 +48,6 @@ fn (mut ws Client) shutdown_socket()? {
 
 // dial_socket, setup socket communication, options and timeouts
 fn (mut ws Client) dial_socket()? net.TcpConn {
-	
 	tcp_socket :=  net.dial_tcp('$ws.uri.hostname:$ws.uri.port')?
 
 	optval := int(1)
@@ -61,7 +59,7 @@ fn (mut ws Client) dial_socket()? net.TcpConn {
 	if ws.is_ssl {
 		ws.ssl_conn.connect(mut tcp_socket)?
 	}
-	
+
 	return tcp_socket
 }
 

@@ -36,7 +36,6 @@ pub mut:
 }
 
 pub fn new_server(port int, route string) &Server{
-
 	return &Server {
 		port: port
 		logger: &log.Log{level: .info}
@@ -48,9 +47,9 @@ pub fn (mut s Server) set_ping_interval(seconds int) {
 	s.ping_interval = seconds
 }
 
-pub fn (mut s Server) listen() ? {
+pub fn (mut s Server) listen()? {
 	s.logger.info('websocket server: start listen on port $s.port')
-	s.ls = net.listen_tcp(s.port) ?
+	s.ls = net.listen_tcp(s.port)?
 	s.set_state(.open)
 	go s.handle_ping()
 	for {
@@ -66,7 +65,7 @@ fn (mut s Server) close() {
 
 // Todo: make thread safe
 fn (mut s Server) handle_ping() {
-	mut clients_to_remove := []&ServerClient{}
+	mut clients_to_remove := []string{}
 	for s.state == .open {
 		time.sleep(s.ping_interval)
 		for _, cli in s.clients {
@@ -79,22 +78,21 @@ fn (mut s Server) handle_ping() {
 						// we want to continue even if error
 						continue
 					}
-					clients_to_remove << c
+					clients_to_remove << c.client.id
 				}
 				if (time.now().unix - c.client.last_pong_ut) > s.ping_interval*2 {
-					clients_to_remove << c
+					clients_to_remove << c.client.id
 					c.client.close(1000, 'no pong received') or {
 						continue
 					}	
 				}
 			}
 		}
-		for cr in clients_to_remove {
-			if s.clients.exists(cr.client.id) {
-				s.clients.delete(cr.client.id)
-			}
+		// TODO replace for with s.clients.delete_all(clients_to_remove) if (https://github.com/vlang/v/pull/6020) merges
+		for client in clients_to_remove {
+			s.clients.delete(client)
 		}
-		clients_to_remove = []&ServerClient{}
+		clients_to_remove.clear()
 	}
 }
 
@@ -107,12 +105,12 @@ fn (mut s Server) serve_client(mut c Client)? {
 	accept := s.send_connect_event(mut server_client)?
 	if !accept {
 		s.logger.debug('server-> client not accepted')
-		c.shutdown_socket() ?
-		return none
+		c.shutdown_socket()?
+		return
 	} 
 		
 	// The client is accepted
-	c.socket_write(handshake_response.bytes()) ?
+	c.socket_write(handshake_response.bytes())?
 	s.clients[server_client.client.id] = server_client
 
 	s.setup_callbacks(mut server_client)
@@ -148,9 +146,7 @@ fn (mut s Server) setup_callbacks(mut sc &ServerClient) {
 	// Set standard close so we can remove client if closed
 	sc.client.on_close_ref(fn (mut c &Client, code int, reason string, mut sc ServerClient)? {
 		c.logger.debug('server-> Delete client')
-		if sc.server.clients.exists(sc.client.id) {
-			sc.server.clients.delete(sc.client.id)
-		}
+		sc.server.clients.delete(sc.client.id)
 	}, mut sc)
 }
 
@@ -169,8 +165,8 @@ fn (mut s Server) accept_new_client() ?&Client{
 	return c
 }
 
-[inline]
 // set_state sets current state in a thread safe way
+[inline]
 fn (mut s Server) set_state(state State) {
 	s.mtx.m_lock()
 	s.state = state

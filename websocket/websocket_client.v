@@ -85,8 +85,8 @@ pub fn new_client(address string)? &Client {
 }
 
 // connect, connects and do handshake procedure with remote server
-pub fn (mut ws Client) connect() ? {
-	ws.assert_not_connected()?
+pub fn (mut ws Client) connect()? {
+	ws.assert_not_connected()
 	ws.set_state(.connecting)
 	ws.logger.info('connecting to host $ws.uri')
 
@@ -95,14 +95,11 @@ pub fn (mut ws Client) connect() ? {
 	ws.set_state(.open)
 	ws.logger.info('successfully connected to host $ws.uri')
 
-	ws.send_open_event() or {
-		return ws.handle_callback_error('error in open event callback: $err')
-	}
-	return none
+	ws.send_open_event()
 }
 
 // listen, listens to incoming messages and handles them
-pub fn (mut ws Client) listen() ? {
+pub fn (mut ws Client) listen()? {
 	ws.logger.info('Starting client listener, server($ws.is_server)...')
 	defer {
 		ws.logger.info('Quit client listener, server($ws.is_server)...')
@@ -110,7 +107,7 @@ pub fn (mut ws Client) listen() ? {
 	for ws.state == .open {
 		msg := ws.read_next_message() or {
 			if ws.state in [.closed] {
-				return none
+				return
 			}
 			ws.debug_log('failed to read next message: $err')
 			return error(err)
@@ -119,23 +116,11 @@ pub fn (mut ws Client) listen() ? {
 		match msg.opcode {
 			.text_frame {
 				ws.debug_log('read: text')
-				ws.send_message_event(mut msg) or {
-					ws.logger.error('error in message callback: $err')
-					if ws.panic_on_callback {
-						panic(err)
-					}
-					continue
-				}
+				ws.send_message_event(mut msg)
 			}
 			.binary_frame {
 				ws.debug_log('read: binary')
-				ws.send_message_event(mut msg) or {
-					ws.logger.error('error in message callback: $err')
-					if ws.panic_on_callback {
-						panic(err)
-					}
-					continue
-				}
+				ws.send_message_event(mut msg)
 			}
 			.ping {
 				ws.debug_log('read: ping, sending pong')
@@ -150,13 +135,7 @@ pub fn (mut ws Client) listen() ? {
 			.pong {
 				ws.debug_log('read: pong')
 				ws.last_pong_ut = time.now().unix
-				ws.send_message_event(mut msg) or {
-					ws.logger.error('error in message callback: $err')
-					if ws.panic_on_callback {
-						panic(err)
-					}
-					continue
-				}
+				ws.send_message_event(mut msg)
 			}
 			.close {
 				ws.debug_log('read: close')
@@ -190,7 +169,7 @@ pub fn (mut ws Client) listen() ? {
 						ws.close(1000, 'normal')?
 					}
 				}
-				return none
+				return
 			}
 			.continuation {
 				ws.logger.error('unexpected opcode continuation, nothing to continue')
@@ -199,15 +178,11 @@ pub fn (mut ws Client) listen() ? {
 			}
 		}
 	}
-	return none
 }
 
 // this function was needed for defer
-fn (mut ws Client) manage_clean_close() ? {
-	ws.send_close_event(1000, 'closed by client') or {
-		ws.logger.error('error in message callback: $err')
-	}
-	return none
+fn (mut ws Client) manage_clean_close() {
+	ws.send_close_event(1000, 'closed by client')
 }
 
 // ping, sends ping message to server, 
@@ -303,7 +278,6 @@ pub fn (mut ws Client) write(bytes []byte, code OPCode) ? {
 		}
 	}
 	ws.socket_write(frame_buf)?
-	return none
 }
 
 // close, closes the websocket connection 
@@ -338,8 +312,6 @@ pub fn (mut ws Client) close(code int, message string) ? {
 		ws.send_close_event(code, '')
 	}
 	ws.fragments = []
-	
-	return none
 }
 
 // send_control_frame, sends a control frame to the server
@@ -399,7 +371,6 @@ fn (mut ws Client) send_control_frame(code OPCode, frame_typ string, payload []b
 	ws.socket_write(control_frame) or {
 		return error('send_control_frame: error sending $frame_typ control frame.')
 	}
-	return none
 }
 
 // parse_uri, parses the url string to it's components
@@ -434,7 +405,6 @@ fn (ws Client) assert_not_connected()? {
 		.open { return error('connect: websocket already open') }
 		else {}
 	}
-	return none
 }
 
 [inline]

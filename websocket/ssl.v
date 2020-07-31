@@ -37,7 +37,6 @@ pub fn (mut s SSLConn) shutdown()? {
 	if s.sslctx != 0 {
 		C.SSL_CTX_free(s.sslctx)
 	}
-	return none
 }
 
 // connect to server using open ssl

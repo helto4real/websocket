@@ -63,7 +63,6 @@ pub fn (mut ws Client) validate_frame(frame &Frame) ? {
 		ws.close(1002, 'unexecpected continuation, there are no frames to continue, $frame')?
 		return error('unexecpected continuation, there are no frames to continue, $frame')
 	}
-	return none
 }
 
 [inline]
@@ -277,7 +276,6 @@ pub fn (mut ws Client) parse_frame_header() ?Frame {
 			return frame
 		}
 	}
-	return none
 }
 
 [inline]
