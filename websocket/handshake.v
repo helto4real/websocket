@@ -15,7 +15,6 @@ fn (mut ws Client) handshake() ? {
 		free(nonce)
 		free(seckey)
 		free(handshake)
-		free(handshake_bytes)
 	}
 }
 
@@ -141,6 +140,9 @@ fn (mut ws Client) read_handshake(seckey string) ? {
 			msg[total_bytes_read - 4] == `\r` {
 			break
 		}
+	}
+	unsafe {
+		free(buffer)
 	}
 	ws.check_handshake_response(string(msg), seckey)?
 }

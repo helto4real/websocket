@@ -270,9 +270,6 @@ pub fn (mut ws Client) write(bytes []byte, code OPCode) ? {
 			ws.close(1009, 'frame too large')?
 			return error('frame too large')
 		}
-		unsafe {
-			free(masking_key)
-		}
 	}
 	mut frame_buf := []byte{}
 	frame_buf << header
