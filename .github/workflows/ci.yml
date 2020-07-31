@@ -17,7 +17,7 @@ jobs:
               v install emily33901.net
           - name: Tests 
             run: |
-              v test .
+              v -stats test .
           - name: Build 
             run: |
               v examples/ping.v
