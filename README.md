@@ -17,13 +17,15 @@ This is a refactor of the current web socket library to comply with V-like style
 
 ## Proposed / planned changes
 
- * [x] Make server autobahn compliant like client [Done]
+ * [x] Make server autobahn compliant like client
+ * [x] Set own timeouts
  * [ ] Strict comply to utf8 autobahn fast fail rule (it comply now but non strict)
+ * [ ] Publish as module
+ * [ ] Set if autoping in server = false if time is 0
+
+## Future changes after v0.2 of V
  * [ ] Generics, use vweb type of app instead of voidptr for reference
  * [ ] Interfaces, IO operations as interfaces for making tests more easy
- * [ ] Publish as module
- * [ ] Set own timeouts
- * [ ] Set if autoping in server = false if time is 0
 
 ## Remarks
 

@@ -43,8 +43,8 @@ fn start_server() ? {
 }
 
 fn start_client() ? {
-	mut ws := websocket.new_client('ws://localhost:30000')?
-	// mut ws := websocket.new_client('wss://echo.websocket.org:443')?
+	// mut ws := websocket.new_client('ws://localhost:30000')?
+	mut ws := websocket.new_client('wss://echo.websocket.org:443')?
 	// use on_open_ref if you want to send any reference object
 	ws.on_open(fn (mut ws websocket.Client) ? {
 		println('open!')
