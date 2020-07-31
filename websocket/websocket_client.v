@@ -21,8 +21,7 @@ pub struct Client {
 mut:
 	mtx               &sync.Mutex = sync.new_mutex()
 	write_lock        &sync.Mutex = sync.new_mutex()
-	sslctx            &C.SSL_CTX
-	ssl               &C.SSL
+	ssl_conn		  &SSLConn
 	flags             []Flag
 	fragments         []Fragment
 	logger            &log.Log
@@ -80,8 +79,7 @@ pub fn new_client(address string)? &Client {
 	uri := parse_uri(address)?
 	return &Client{
 		is_server: false
-		sslctx: 0
-		ssl: 0
+		ssl_conn: new_ssl_conn()
 		is_ssl: address.starts_with('wss')
 		logger: &log.Log{level: .info}
 		uri: uri
@@ -427,8 +425,7 @@ fn (ws Client) assert_not_connected()? {
 fn (mut ws Client) reset_state() {
 	ws.mtx.m_lock()
 	ws.state = .closed
-	ws.sslctx = 0
-	ws.ssl = 0
+	ws.ssl_conn = new_ssl_conn()
 	ws.flags = []
 	ws.fragments = []
 	ws.mtx.unlock()

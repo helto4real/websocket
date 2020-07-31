@@ -10,21 +10,9 @@ interface WebsocketIO {
 
 // socket_read_into reads into the provided buffer with it's lenght
 fn (mut ws Client) socket_read_into(mut buffer []byte) ?int {
-	if ws.is_ssl {
-		res := C.SSL_read(ws.ssl, buffer.data, buffer.len)
-		if res >= 0 {
-			return res
-		}
-		code := error_code()
-		match code {
-			error_ewouldblock {
-				ws.conn.wait_for_read()?
-				return socket_error(C.SSL_read(ws.ssl, buffer.data, buffer.len))
-			}
-			else {
-				wrap_error(code)?
-			}
-		}
+		if ws.is_ssl {
+		r := ws.ssl_conn.read_into(mut buffer)?
+		return r
 	} else {
 		r := ws.conn.read_into(mut buffer)?
 		return r
@@ -47,33 +35,7 @@ fn (mut ws Client) socket_write(bytes []byte) ? {
 		ws.write_lock.unlock()
 	}
 	if ws.is_ssl {
-		mut ptr_base := byteptr(bytes.data)
-		mut total_sent := 0
-		for total_sent < bytes.len {
-			ptr := unsafe{ptr_base + total_sent}
-			remaining := bytes.len - total_sent
-			mut sent := C.SSL_write(ws.ssl, ptr, remaining)
-			unsafe {
-				free(ptr)
-				free(remaining)
-			}
-			if sent < 0 {
-				code := error_code()
-				match code {
-					error_ewouldblock {
-						ws.conn.wait_for_write()
-						continue
-					}
-					else {
-						wrap_error(code)?
-					}
-				}
-			}
-			total_sent += sent
-		}
-		unsafe {
-			free(ptr_base)
-		}
+		ws.ssl_conn.write(bytes)?
 	} else {
 		ws.conn.write(bytes)?
 	}
@@ -82,11 +44,11 @@ fn (mut ws Client) socket_write(bytes []byte) ? {
 // shutdown_socket, proper shutdown make PR in Emeliy repo
 fn (mut ws Client) shutdown_socket()? {
 	ws.debug_log('shutting down socket')
-	if ws.ssl != 0 {
-		ws.shutdown_ssl()
-	} else {
-		ws.conn.close()?
-	}
+	if ws.is_ssl {
+		ws.ssl_conn.shutdown()?
+	} 
+	ws.conn.close()?
+	return none
 }
 
 // dial_socket, setup socket communication, options and timeouts
@@ -100,7 +62,7 @@ fn (mut ws Client) dial_socket()? net.TcpConn {
 	ws.conn.set_write_timeout(3 * time.second)
 
 	if ws.is_ssl {
-		ws.connect_ssl()?
+		ws.ssl_conn.connect(mut tcp_socket)?
 	}
 
 	return tcp_socket
