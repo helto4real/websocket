@@ -108,7 +108,8 @@ fn (mut ws Client) read_handshake_str() ?string {
 
 // read_handshake reads the handshake and check if valid
 fn (mut ws Client) read_handshake(seckey string) ? {
-	ws.check_handshake_response(ws.read_handshake_str(), seckey)?
+	msg := ws.read_handshake_str()?
+	ws.check_handshake_response(msg, seckey)?
 }
 
 fn (mut ws Client) check_handshake_response(handshake_response, seckey string) ? {
