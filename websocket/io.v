@@ -21,11 +21,6 @@ fn (mut ws Client) socket_read_into(mut buffer []byte) ?int {
 
 // socket_write, writes the whole byte array provided to the socket
 fn (mut ws Client) socket_write(bytes []byte) ? {
-	defer {
-		unsafe {
-			free(bytes)
-		}
-	}
 	if ws.state == .closed || ws.conn.sock.handle <= 1 {
 		ws.debug_log('write: Socket allready closed')
 		return error('Socket allready closed')

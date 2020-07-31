@@ -217,13 +217,6 @@ pub fn (mut ws Client) write(bytes []byte, code OPCode) ? {
 	mut header := [`0`].repeat(header_len)
 	header[0] = byte(code) | 0x80
 	mut masking_key := []byte{}
-	defer {
-		unsafe {
-			free(payload_len)
-			free(masking_key)
-			free(header)
-		}
-	}
 	if ws.is_server {
 		if payload_len <= 125 {
 			header[1] = byte(payload_len ) //| 0x80
@@ -289,6 +282,11 @@ pub fn (mut ws Client) write(bytes []byte, code OPCode) ? {
 		for i in 0 .. payload_len {
 			frame_buf[header_len + i] ^= masking_key[i % 4] & 0xff
 		}
+	}
+	unsafe {
+		free(payload_len)
+		free(masking_key)
+		free(header)
 	}
 	ws.socket_write(frame_buf)?
 }
