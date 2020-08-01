@@ -106,7 +106,7 @@ pub fn (mut ws Client) listen()? {
 	}
 	for ws.state == .open {
 		msg := ws.read_next_message() or {
-			if ws.state in [.closed] {
+			if ws.state in [.closed, .closing] {
 				return
 			}
 			ws.debug_log('failed to read next message: $err')

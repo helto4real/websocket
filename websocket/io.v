@@ -10,12 +10,20 @@ interface WebsocketIO {
 
 // socket_read_into reads into the provided buffer with it's lenght
 fn (mut ws Client) socket_read_into(mut buffer []byte) ?int {
-		if ws.is_ssl {
+
+	if ws.is_ssl {
 		r := ws.ssl_conn.read_into(mut buffer)?
 		return r
 	} else {
-		r := ws.conn.read_into(mut buffer)?
-		return r
+		for {
+			r := ws.conn.read_into(mut buffer) or {
+				if errcode == net.err_read_timed_out_code {
+					continue
+				}
+				return error(err)
+			}
+			return r
+		}
 	}
 }
 
@@ -32,7 +40,15 @@ fn (mut ws Client) socket_write(bytes []byte) ? {
 	if ws.is_ssl {
 		ws.ssl_conn.write(bytes)?
 	} else {
-		ws.conn.write(bytes)?
+		for {
+			ws.conn.write(bytes) or {
+				if errcode == net.err_write_timed_out_code {
+					continue
+				}
+				return error(err)
+			}
+			return
+		}
 	}
 }
 
@@ -40,26 +56,29 @@ fn (mut ws Client) socket_write(bytes []byte) ? {
 fn (mut ws Client) shutdown_socket()? {
 	ws.debug_log('shutting down socket')
 	if ws.is_ssl {
-		ws.ssl_conn.shutdown()?
-	} 
-	ws.conn.close()?
+		ws.ssl_conn.shutdown() or {
+			println('error when shutdown socket $err')
+			return error(err)
+		}
+	} else {
+		ws.conn.close()?
+	}
 	return none
 }
 
 // dial_socket, setup socket communication, options and timeouts
 fn (mut ws Client) dial_socket()? net.TcpConn {
-	tcp_socket :=  net.dial_tcp('$ws.uri.hostname:$ws.uri.port')?
-
+	mut t := net.dial_tcp('$ws.uri.hostname:$ws.uri.port')?
 	optval := int(1)
-	tcp_socket.sock.set_option_int(.keep_alive, optval)?
+	t.sock.set_option_int(.keep_alive, optval)?
 
-	ws.conn.set_read_timeout(3 * time.second)
-	ws.conn.set_write_timeout(3 * time.second)
+	t.set_read_timeout(10 * time.millisecond)
+	t.set_write_timeout(10 * time.millisecond)
 
 	if ws.is_ssl {
-		ws.ssl_conn.connect(mut tcp_socket)?
+		ws.ssl_conn.connect(mut t)?
 	}
 
-	return tcp_socket
+	return t
 }
 
