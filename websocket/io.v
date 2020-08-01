@@ -56,10 +56,7 @@ fn (mut ws Client) socket_write(bytes []byte) ? {
 fn (mut ws Client) shutdown_socket()? {
 	ws.debug_log('shutting down socket')
 	if ws.is_ssl {
-		ws.ssl_conn.shutdown() or {
-			println('error when shutdown socket $err')
-			return error(err)
-		}
+		ws.ssl_conn.shutdown()?
 	} else {
 		ws.conn.close()?
 	}
