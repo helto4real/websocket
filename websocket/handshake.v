@@ -23,7 +23,7 @@ fn (mut s Server) handle_server_handshake(mut c Client) ?(string, &ServerClient)
 
 fn (mut s Server) parse_client_handshake(client_handshake string, mut c Client) ?(string, &ServerClient) {
 	s.logger.debug('server-> client handshake:\n$client_handshake')
-	
+
 	lines := client_handshake.split_into_lines()
 
 	get_tokens := lines[0].split(' ')
@@ -60,7 +60,7 @@ fn (mut s Server) parse_client_handshake(client_handshake string, mut c Client) 
 				s.logger.debug('server-> got key: $key')
 				seckey = create_key_challenge_response(key)?
 				s.logger.debug('server-> challenge: $seckey, response: ${keys[1]}')
-				
+
 				flags << .has_accept
 			}
 			else {
@@ -72,7 +72,7 @@ fn (mut s Server) parse_client_handshake(client_handshake string, mut c Client) 
 		return error('invalid client handshake, $client_handshake')
 	}
 	server_handshake := 'HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: $seckey\r\n\r\n'
-	
+
 	server_client := &ServerClient{
 		resource_name: get_tokens[1]
 		client_key: key

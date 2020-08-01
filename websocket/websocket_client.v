@@ -1,6 +1,6 @@
 // The module websocket implements the websocket capabilities
 // it is a refactor of the original V-websocket client class
-// from @thecoderr 
+// from @thecoderr
 
 module websocket
 
@@ -35,7 +35,7 @@ pub mut:
 	panic_on_callback bool = false
 	state             State
 	resource_name	  string
-	last_pong_ut	  u64 
+	last_pong_ut	  u64
 }
 
 enum Flag {
@@ -106,7 +106,7 @@ pub fn (mut ws Client) listen()? {
 	}
 	for ws.state == .open {
 		msg := ws.read_next_message() or {
-			if ws.state in [.closed] {
+			if ws.state in [.closed, .closing] {
 				return
 			}
 			ws.debug_log('failed to read next message: $err')
@@ -185,13 +185,13 @@ fn (mut ws Client) manage_clean_close() {
 	ws.send_close_event(1000, 'closed by client')
 }
 
-// ping, sends ping message to server, 
+// ping, sends ping message to server,
 // 		 ping response will be pushed to message callback
 pub fn (mut ws Client) ping() ? {
 	ws.send_control_frame(.ping, 'PING', []) ?
 }
 
-// pong, sends pog message to server, 
+// pong, sends pog message to server,
 // 		 pongs are normally automatically sent back to server
 pub fn (mut ws Client) pong() ? {
 	ws.send_control_frame(.pong, 'PONG', []) ?
@@ -209,7 +209,7 @@ pub fn (mut ws Client) write(bytes []byte, code OPCode) ? {
 	if !ws.is_server {
 		header_len += 4
 	}
-	
+
 	mut header := [`0`].repeat(header_len)
 	header[0] = byte(code) | 0x80
 	mut masking_key := []byte{}
@@ -218,17 +218,20 @@ pub fn (mut ws Client) write(bytes []byte, code OPCode) ? {
 			header[1] = byte(payload_len ) //| 0x80
 		} else if payload_len > 125 && payload_len <= 0xffff {
 			len16 := C.htons(payload_len)
-			header[1] = (126 ) //| 0x80
+			header[1] = 126  //| 0x80
 			// todo: fix v style copy instead
 			unsafe {
-				C.memcpy(header.data + 2, &len16, 2)
+				C.memcpy(&header[2], &len16, 2)
 			}
 		} else if payload_len > 0xffff && payload_len <= 0xffffffffffffffff {
-			len64 := htonl64(u64(payload_len))
-			header[1] = (127) // 0x80
+
+			len_bytes := htonl64(u64(payload_len))
+
+			header[1] = 127// 0x80
+
 			// todo: fix v style copy instead
 			unsafe {
-				C.memcpy(header.data + 2, len64.data, 8)
+				C.memcpy(&header[2], len_bytes.data, 8)
 			}
 		}
 	} else {
@@ -244,7 +247,7 @@ pub fn (mut ws Client) write(bytes []byte, code OPCode) ? {
 			header[1] = (126 | 0x80)
 			// todo: fix v style copy instead
 			unsafe {
-				C.memcpy(header.data + 2, &len16, 2)
+				C.memcpy(&header[2], &len16, 2)
 			}
 			header[4] = masking_key[0]
 			header[5] = masking_key[1]
@@ -255,7 +258,7 @@ pub fn (mut ws Client) write(bytes []byte, code OPCode) ? {
 			header[1] = (127 | 0x80)
 			// todo: fix v style copy instead
 			unsafe {
-				C.memcpy(header.data + 2, len64.data, 8)
+				C.memcpy(&header[2], len64.data, 8)
 			}
 			header[10] = masking_key[0]
 			header[11] = masking_key[1]
@@ -280,7 +283,7 @@ pub fn (mut ws Client) write(bytes []byte, code OPCode) ? {
 	ws.socket_write(frame_buf)?
 }
 
-// close, closes the websocket connection 
+// close, closes the websocket connection
 pub fn (mut ws Client) close(code int, message string) ? {
 	ws.debug_log('sending close, $code, $message')
 	if ws.state in [.closed, .closing] || ws.conn.sock.handle <= 1 {
@@ -339,7 +342,7 @@ fn (mut ws Client) send_control_frame(code OPCode, frame_typ string, payload []b
 	}
 	if code == .close {
 		if payload.len >= 2 {
-			
+
 			if !ws.is_server {
 				mut parsed_payload := [`0`].repeat(payload.len + 1)
 				unsafe {
@@ -351,8 +354,8 @@ fn (mut ws Client) send_control_frame(code OPCode, frame_typ string, payload []b
 				}
 			} else {
 				unsafe {
-					C.memcpy(control_frame.data+2, &payload[0], payload.len)
-				}	
+					C.memcpy(&control_frame[2], &payload[0], payload.len)
+				}
 			}
 		}
 	} else {
