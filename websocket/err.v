@@ -1,5 +1,4 @@
 module websocket
-import emily33901.net
 // These are errors regarding the net.Socket2 api
 const (
 	socket_errors_base = 0
