@@ -1,7 +1,6 @@
 // The module websocket implements the websocket capabilities
 // it is a refactor of the original V-websocket client class
 // from @thecoderr
-
 module websocket
 
 import emily33901.net
@@ -13,29 +12,27 @@ import rand
 
 // Client represents websocket client state
 pub struct Client {
-	is_server		  bool = false
+	is_server         bool = false
 mut:
-	mtx               &sync.Mutex = sync.new_mutex()
-	write_lock        &sync.Mutex = sync.new_mutex()
-	ssl_conn		  &SSLConn
+	ssl_conn          &SSLConn
 	flags             []Flag
 	fragments         []Fragment
 	logger            &log.Log
 	message_callbacks []MessageEventHandler
-	error_callbacks	  []ErrorEventHandler
-	open_callbacks	  []OpenEventHandler
-	close_callbacks	  []CloseEventHandler
+	error_callbacks   []ErrorEventHandler
+	open_callbacks    []OpenEventHandler
+	close_callbacks   []CloseEventHandler
 pub:
 	is_ssl            bool
 	uri               Uri
-	id 				  string
+	id                string
 pub mut:
 	conn              net.TcpConn
 	nonce_size        int = 16 // you can try 18 too
 	panic_on_callback bool = false
 	state             State
-	resource_name	  string
-	last_pong_ut	  u64
+	resource_name     string
+	last_pong_ut      u64
 }
 
 enum Flag {
@@ -71,13 +68,15 @@ pub enum OPCode {
 }
 
 // new_client, instance a new websocket client
-pub fn new_client(address string)? &Client {
+pub fn new_client(address string) ?&Client {
 	uri := parse_uri(address)?
 	return &Client{
 		is_server: false
 		ssl_conn: new_ssl_conn()
 		is_ssl: address.starts_with('wss')
-		logger: &log.Log{level: .info}
+		logger: &log.Log{
+			level: .info
+		}
 		uri: uri
 		state: .closed
 		id: rand.uuid_v4()
@@ -85,21 +84,19 @@ pub fn new_client(address string)? &Client {
 }
 
 // connect, connects and do handshake procedure with remote server
-pub fn (mut ws Client) connect()? {
+pub fn (mut ws Client) connect() ? {
 	ws.assert_not_connected()
 	ws.set_state(.connecting)
 	ws.logger.info('connecting to host $ws.uri')
-
 	ws.conn = ws.dial_socket()?
 	ws.handshake()?
 	ws.set_state(.open)
 	ws.logger.info('successfully connected to host $ws.uri')
-
 	ws.send_open_event()
 }
 
 // listen, listens to incoming messages and handles them
-pub fn (mut ws Client) listen()? {
+pub fn (mut ws Client) listen() ? {
 	ws.logger.info('Starting client listener, server($ws.is_server)...')
 	defer {
 		ws.logger.info('Quit client listener, server($ws.is_server)...')
@@ -159,7 +156,7 @@ pub fn (mut ws Client) listen()? {
 					if ws.state !in [.closing, .closed] {
 						// sending close back according to spec
 						ws.debug_log('close with reason, code: $code, reason: $reason')
-						r := if reason.len > 0 {string(reason)} else {''}
+						r := if reason.len > 0 { string(reason) } else { '' }
 						ws.close(code, r)?
 					}
 				} else {
@@ -186,15 +183,15 @@ fn (mut ws Client) manage_clean_close() {
 }
 
 // ping, sends ping message to server,
-// 		 ping response will be pushed to message callback
+// ping response will be pushed to message callback
 pub fn (mut ws Client) ping() ? {
-	ws.send_control_frame(.ping, 'PING', []) ?
+	ws.send_control_frame(.ping, 'PING', [])?
 }
 
 // pong, sends pog message to server,
-// 		 pongs are normally automatically sent back to server
+// pongs are normally automatically sent back to server
 pub fn (mut ws Client) pong() ? {
-	ws.send_control_frame(.pong, 'PONG', []) ?
+	ws.send_control_frame(.pong, 'PONG', [])?
 }
 
 // write, writes a byte array with a websocket messagetype
@@ -209,26 +206,24 @@ pub fn (mut ws Client) write(bytes []byte, code OPCode) ? {
 	if !ws.is_server {
 		header_len += 4
 	}
-
 	mut header := [`0`].repeat(header_len)
-	header[0] = byte(code) | 0x80
+	header[0] = byte(int(code)) | 0x80
 	mut masking_key := []byte{}
 	if ws.is_server {
 		if payload_len <= 125 {
-			header[1] = byte(payload_len ) //| 0x80
+			header[1] = byte(payload_len)
+			// 0x80
 		} else if payload_len > 125 && payload_len <= 0xffff {
 			len16 := C.htons(payload_len)
-			header[1] = 126  //| 0x80
+			header[1] = 126
+			// 0x80
 			// todo: fix v style copy instead
 			unsafe {
 				C.memcpy(&header[2], &len16, 2)
 			}
 		} else if payload_len > 0xffff && payload_len <= 0xffffffffffffffff {
-
 			len_bytes := htonl64(u64(payload_len))
-
-			header[1] = 127// 0x80
-
+			header[1] = 127 // 0x80
 			// todo: fix v style copy instead
 			unsafe {
 				C.memcpy(&header[2], len_bytes.data, 8)
@@ -269,12 +264,10 @@ pub fn (mut ws Client) write(bytes []byte, code OPCode) ? {
 			ws.close(1009, 'frame too large')?
 			return error('frame too large')
 		}
-
 	}
 	mut frame_buf := []byte{}
 	frame_buf << header
 	frame_buf << bytes
-
 	if !ws.is_server {
 		for i in 0 .. payload_len {
 			frame_buf[header_len + i] ^= masking_key[i % 4] & 0xff
@@ -323,12 +316,11 @@ fn (mut ws Client) send_control_frame(code OPCode, frame_typ string, payload []b
 	if ws.state !in [.open, .closing] && ws.conn.sock.handle > 1 {
 		return error('socket is not connected')
 	}
-	header_len := if ws.is_server {2} else {6}
+	header_len := if ws.is_server { 2 } else { 6 }
 	frame_len := header_len + payload.len
 	mut control_frame := [`0`].repeat(frame_len)
 	mut masking_key := []byte{}
-
-	control_frame[0] = byte(code | 0x80)
+	control_frame[0] = byte(int(code) | 0x80)
 	if !ws.is_server {
 		masking_key = create_masking_key()
 		control_frame[1] = byte(payload.len | 0x80)
@@ -336,13 +328,11 @@ fn (mut ws Client) send_control_frame(code OPCode, frame_typ string, payload []b
 		control_frame[3] = masking_key[1]
 		control_frame[4] = masking_key[2]
 		control_frame[5] = masking_key[3]
-
 	} else {
 		control_frame[1] = byte(payload.len)
 	}
 	if code == .close {
 		if payload.len >= 2 {
-
 			if !ws.is_server {
 				mut parsed_payload := [`0`].repeat(payload.len + 1)
 				unsafe {
@@ -366,7 +356,7 @@ fn (mut ws Client) send_control_frame(code OPCode, frame_typ string, payload []b
 		} else {
 			if payload.len > 0 {
 				unsafe {
-						C.memcpy(&control_frame[2], &payload[0], payload.len)
+					C.memcpy(&control_frame[2], &payload[0], payload.len)
 				}
 			}
 		}
@@ -378,7 +368,7 @@ fn (mut ws Client) send_control_frame(code OPCode, frame_typ string, payload []b
 
 // parse_uri, parses the url string to it's components
 // todo: support not using port to default ones
-fn parse_uri(url string)? &Uri {
+fn parse_uri(url string) ?&Uri {
 	u := urllib.parse(url) or {
 		return error(err)
 	}
@@ -396,13 +386,13 @@ fn parse_uri(url string)? &Uri {
 [inline]
 // set_state sets current state in a thread safe way
 fn (mut ws Client) set_state(state State) {
-	ws.mtx.m_lock()
-	ws.state = state
-	ws.mtx.unlock()
+	lock  {
+		ws.state = state
+	}
 }
 
 [inline]
-fn (ws Client) assert_not_connected()? {
+fn (ws Client) assert_not_connected() ? {
 	match ws.state {
 		.connecting { return error('connect: websocket is connecting') }
 		.open { return error('connect: websocket already open') }
@@ -413,12 +403,12 @@ fn (ws Client) assert_not_connected()? {
 [inline]
 // reset_state, resets the websocket and can connect again
 fn (mut ws Client) reset_state() {
-	ws.mtx.m_lock()
-	ws.state = .closed
-	ws.ssl_conn = new_ssl_conn()
-	ws.flags = []
-	ws.fragments = []
-	ws.mtx.unlock()
+	lock  {
+		ws.state = .closed
+		ws.ssl_conn = new_ssl_conn()
+		ws.flags = []
+		ws.fragments = []
+	}
 }
 
 fn (mut ws Client) debug_log(text string) {

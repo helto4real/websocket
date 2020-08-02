@@ -5,7 +5,7 @@ import crypto.sha1
 import encoding.base64
 
 fn htonl64(payload_len u64) []byte {
-	mut ret := []byte{len:8}
+	mut ret := []byte{len: 8}
 	// mut ret := malloc(8)
 	ret[0] = byte(((payload_len & (u64(0xff) << 56)) >> 56) & 0xff)
 	ret[1] = byte(((payload_len & (u64(0xff) << 48)) >> 48) & 0xff)
@@ -19,9 +19,8 @@ fn htonl64(payload_len u64) []byte {
 }
 
 fn create_masking_key() []byte {
-	mask_bit := byte(rand.intn(255)) 
+	mask_bit := byte(rand.intn(255))
 	buf := [`0`].repeat(4)
-
 	unsafe {
 		C.memcpy(buf.data, &mask_bit, 4)
 	}

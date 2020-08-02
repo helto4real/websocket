@@ -13,7 +13,6 @@ fn C.SSL_get_error() int
 // Todo: move this to openssl lib later
 // For SSL to compile on windows we need to
 // change the open ssl C flags to :
-
 // #flag linux -I/usr/local/include/openssl -L/usr/local/lib
 // #flag linux -l ssl -l crypto
 // #flag windows -l libssl -l libcrypto
@@ -21,21 +20,22 @@ fn C.SSL_get_error() int
 // #flag darwin -I/opt/local/include
 // #flag darwin -L/opt/local/lib
 // #flag darwin -l ssl -l crypto
-
 pub struct SSLConn {
 mut:
-	sslctx            &C.SSL_CTX
-	ssl               &C.SSL
-	handle			  int
-	duration		  time.Duration
+	sslctx   &C.SSL_CTX
+	ssl      &C.SSL
+	handle   int
+	duration time.Duration
 }
 
 enum Select {
-	read write except
+	read
+	write
+	except
 }
 
 pub fn new_ssl_conn() &SSLConn {
-	return &SSLConn {
+	return &SSLConn{
 		sslctx: 0
 		ssl: 0
 		handle: 0
@@ -43,8 +43,8 @@ pub fn new_ssl_conn() &SSLConn {
 }
 
 // shutdown closes the ssl connection and do clean up
-pub fn (mut s SSLConn) shutdown()? {
-	if s.ssl!=0 {
+pub fn (mut s SSLConn) shutdown() ? {
+	if s.ssl != 0 {
 		mut res := 0
 		for {
 			res = int(C.SSL_shutdown(s.ssl))
@@ -55,13 +55,17 @@ pub fn (mut s SSLConn) shutdown()? {
 				if err_res == .ssl_error_want_read {
 					for {
 						ready := @select(s.handle, .read, s.duration)?
-						if ready {break}
+						if ready {
+							break
+						}
 					}
 					continue
 				} else if err_res == .ssl_error_want_write {
 					for {
 						ready := @select(s.handle, .write, s.duration)?
-						if ready {break}
+						if ready {
+							break
+						}
 					}
 					continue
 				} else {
@@ -78,7 +82,6 @@ pub fn (mut s SSLConn) shutdown()? {
 			} else if res == 1 {
 				break
 			}
-
 		}
 		C.SSL_free(s.ssl)
 	}
@@ -88,7 +91,7 @@ pub fn (mut s SSLConn) shutdown()? {
 }
 
 // connect to server using open ssl
-pub fn (mut s SSLConn) connect(mut tcp_conn &net.TcpConn)? {
+pub fn (mut s SSLConn) connect(mut tcp_conn net.TcpConn) ? {
 	s.handle = tcp_conn.sock.handle
 	s.duration = tcp_conn.read_timeout()
 	C.SSL_load_error_strings()
@@ -96,7 +99,6 @@ pub fn (mut s SSLConn) connect(mut tcp_conn &net.TcpConn)? {
 	if s.sslctx == 0 {
 		return error("Couldn't get ssl context")
 	}
-
 	s.ssl = C.SSL_new(s.sslctx)
 	if s.ssl == 0 {
 		return error("Couldn't create OpenSSL instance.")
@@ -104,7 +106,6 @@ pub fn (mut s SSLConn) connect(mut tcp_conn &net.TcpConn)? {
 	if C.SSL_set_fd(s.ssl, tcp_conn.sock.handle) != 1 {
 		return error("Couldn't assign ssl to socket.")
 	}
-
 	for {
 		res := C.SSL_connect(s.ssl)
 		if res != 1 {
@@ -112,13 +113,17 @@ pub fn (mut s SSLConn) connect(mut tcp_conn &net.TcpConn)? {
 			if err_res == .ssl_error_want_read {
 				for {
 					ready := @select(s.handle, .read, s.duration)?
-					if ready {break}
+					if ready {
+						break
+					}
 				}
 				continue
 			} else if err_res == .ssl_error_want_write {
 				for {
 					ready := @select(s.handle, .write, s.duration)?
-					if ready {break}
+					if ready {
+						break
+					}
 				}
 				continue
 			}
@@ -128,25 +133,26 @@ pub fn (mut s SSLConn) connect(mut tcp_conn &net.TcpConn)? {
 	}
 }
 
-pub fn (mut s SSLConn) read_into(mut buffer []Byte)? int {
+pub fn (mut s SSLConn) read_into(mut buffer []Byte) ?int {
 	mut res := 0
-
 	for {
 		res = C.SSL_read(s.ssl, buffer.data, buffer.len)
-
 		if res < 0 {
 			err_res := s.ssl_error(res)?
-
 			if err_res == .ssl_error_want_read {
 				for {
 					ready := @select(s.handle, .read, s.duration)?
-					if ready {break}
+					if ready {
+						break
+					}
 				}
 				continue
 			} else if err_res == .ssl_error_want_write {
 				for {
 					ready := @select(s.handle, .write, s.duration)?
-					if ready {break}
+					if ready {
+						break
+					}
 				}
 				continue
 			} else if err_res == .ssl_error_zero_return {
@@ -158,12 +164,11 @@ pub fn (mut s SSLConn) read_into(mut buffer []Byte)? int {
 		}
 		break
 	}
-
 	return res
 }
 
 // write number of bytes to SSL connection
-pub fn (mut s SSLConn) write(bytes []Byte)? {
+pub fn (mut s SSLConn) write(bytes []Byte) ? {
 	unsafe {
 		mut ptr_base := byteptr(bytes.data)
 		mut total_sent := 0
@@ -176,12 +181,16 @@ pub fn (mut s SSLConn) write(bytes []Byte)? {
 				if err_res == .ssl_error_want_read {
 					for {
 						ready := @select(s.handle, .read, s.duration)?
-						if ready {break}
+						if ready {
+							break
+						}
 					}
 				} else if err_res == .ssl_error_want_write {
 					for {
 						ready := @select(s.handle, .write, s.duration)?
-						if ready {break}
+						if ready {
+							break
+						}
 					}
 					continue
 				} else if err_res == .ssl_error_zero_return {
@@ -195,18 +204,13 @@ pub fn (mut s SSLConn) write(bytes []Byte)? {
 }
 
 // ssl_error returns non error ssl code or error if unrecoverable and we should panic
-fn (mut s SSLConn) ssl_error(ret int)? SSLError{
+fn (mut s SSLConn) ssl_error(ret int) ?SSLError {
 	res := C.SSL_get_error(s.ssl, ret)
 	match SSLError(res) {
-		.ssl_error_syscall {
-			return error_with_code('unrecoverable syscall ($res)', res)
-		}
-		.ssl_error_ssl {
-			return error_with_code('unrecoverable ssl protocol error ($res)', res)
-		}
-		else {
-			return res
-		}
+		.ssl_error_syscall { return error_with_code('unrecoverable syscall ($res)', res) }
+		.ssl_error_ssl { return error_with_code('unrecoverable ssl protocol error ($res)',
+				res) }
+		else { return res }
 	}
 }
 
@@ -224,37 +228,29 @@ enum SSLError {
 	ssl_error_want_async_job = C.SSL_ERROR_WANT_ASYNC_JOB
 	ssl_error_want_client_hello_cb = C.SSL_ERROR_WANT_CLIENT_HELLO_CB
 }
+
 /*
-	This is basically a copy of Emily socket implementation of select.
+This is basically a copy of Emily socket implementation of select.
 	This have to be consolidated into common net lib features
 	when merging this to V
 */
 [typedef]
-pub struct C.fd_set {}
+pub struct C.fd_set {
+}
 
 // Select waits for an io operation (specified by parameter `test`) to be available
 fn @select(handle int, test Select, timeout time.Duration) ?bool {
 	set := C.fd_set{}
-
 	C.FD_ZERO(&set)
 	C.FD_SET(handle, &set)
-
 	timeval_timeout := C.timeval{
 		tv_sec: u64(0)
 		tv_usec: u64(timeout.microseconds())
 	}
-
 	match test {
-		.read {
-			socket_error(C.@select(handle, &set, C.NULL, C.NULL, &timeval_timeout))?
-		}
-		.write {
-			socket_error(C.@select(handle, C.NULL, &set, C.NULL, &timeval_timeout))?
-		}
-		.except {
-			socket_error(C.@select(handle, C.NULL, C.NULL, &set, &timeval_timeout))?
-		}
+		.read { socket_error(C.@select(handle, &set, C.NULL, C.NULL, &timeval_timeout))? }
+		.write { socket_error(C.@select(handle, C.NULL, &set, C.NULL, &timeval_timeout))? }
+		.except { socket_error(C.@select(handle, C.NULL, C.NULL, &set, &timeval_timeout))? }
 	}
-
 	return C.FD_ISSET(handle, &set)
 }
