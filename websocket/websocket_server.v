@@ -67,7 +67,6 @@ fn (mut s Server) close() {
 }
 
 fn (mut s Server) handle_ping() {
-	mut clients_to_remove := []string{}
 	for s.state == .open {
 		time.sleep(s.ping_interval)
 		s.priv_send_ping()
@@ -84,6 +83,7 @@ pub fn (mut s Server) send_ping()? {
 
 // Todo: make thread safe
 fn (mut s Server) priv_send_ping() {
+	mut clients_to_remove := []string{}
 	for _, cli in s.clients {
 		mut c := cli
 		if c.client.state == .open {
