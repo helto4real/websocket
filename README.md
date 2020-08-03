@@ -19,7 +19,7 @@ This is a refactor of the current web socket library to comply with V-like style
 
  * [x] Make server autobahn compliant like client
  * [x] Set own timeouts
- * [ ] Make sure it works on windows
+ * [x] Make sure it works on windows
  * [ ] Strict comply to utf8 autobahn fast fail rule (it comply now but non strict)
  * [ ] Publish as module
  * [ ] Set if autoping in server = false if time is 0
