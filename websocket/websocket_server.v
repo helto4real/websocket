@@ -77,7 +77,7 @@ pub fn (mut s Server) send_ping()? {
 	if s.ping_interval != 0 {
 		s.priv_send_ping()
 	} else {
-		return err("WS Server it's handling ping sending")
+		return error("WS Server it's handling ping sending")
 	}
 }
 
