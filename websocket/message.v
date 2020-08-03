@@ -90,7 +90,7 @@ fn (mut ws Client) read_payload(payload_len int) ?[]byte {
 		if len != 1 {
 			return error('expected read all message, got zero')
 		}
-		bytes_read+=len
+		bytes_read += len
 		buffer << read_buf[0]
 	}
 	if bytes_read != payload_len {
@@ -211,7 +211,6 @@ pub fn (mut ws Client) parse_frame_header() ?Frame {
 			// This is probably a timeout or close
 			continue
 		}
-		
 		buffer << rbuff[0]
 		// bytes_read++
 		// parses the first two header bytes to get basic frame information
@@ -230,7 +229,7 @@ pub fn (mut ws Client) parse_frame_header() ?Frame {
 				} else if frame.payload_len == 126 {
 					header_len_offset + 6
 				} else if frame.payload_len == 127 {
-					header_len_offset + 12 
+					header_len_offset + 12
 				} else {
 					0
 				} // Impossible
@@ -272,7 +271,6 @@ pub fn (mut ws Client) parse_frame_header() ?Frame {
 			frame.masking_key[1] = buffer[mask_end_byte - 3]
 			frame.masking_key[2] = buffer[mask_end_byte - 2]
 			frame.masking_key[3] = buffer[mask_end_byte - 1]
-			
 			return frame
 		}
 	}

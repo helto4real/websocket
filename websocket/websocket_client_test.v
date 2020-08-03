@@ -2,12 +2,12 @@ import websocket
 import time
 
 // Tests with external ws & wss servers
-fn test_ws()? {
+fn test_ws() ? {
 	ws_test('ws://echo.websocket.org')?
 	ws_test('wss://echo.websocket.org')?
 }
 
-fn ws_test(uri string)? {
+fn ws_test(uri string) ? {
 	println('connecting to $uri ...')
 	mut ws := websocket.new_client(uri)?
 	ws.on_open(fn (mut ws websocket.Client) ? {
