@@ -17,7 +17,7 @@ fn (mut ws Client) socket_read_into(mut buffer []byte) ?int {
 		} else {
 			for {
 				r := ws.conn.read_into(mut buffer) or {
-					if errcode == net.err_read_timed_out_code {
+					if errcode == net.err_timed_out_code {
 						continue
 					}
 					return error(err)
@@ -40,7 +40,7 @@ fn (mut ws Client) socket_write(bytes []byte) ? {
 		} else {
 			for {
 				ws.conn.write(bytes) or {
-					if errcode == net.err_write_timed_out_code {
+					if errcode == net.err_timed_out_code {
 						continue
 					}
 					return error(err)
