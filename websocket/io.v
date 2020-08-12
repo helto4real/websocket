@@ -28,6 +28,26 @@ fn (mut ws Client) socket_read_into(mut buffer []byte) ?int {
 	}
 }
 
+fn (mut ws Client) socket_read_into_ptr(buf_ptr byteptr, len int) ?int {
+	lock  {
+		if ws.is_ssl {
+			// r := ws.ssl_conn.read_into(mut buffer)?
+			return 1
+		} else {
+			for {
+				r := ws.conn.read_into_ptr(buf_ptr, len) or {
+					if errcode == net.err_timed_out_code {
+						continue
+					}
+					return error(err)
+				}
+				return r
+			}
+		}
+	}
+}
+
+
 // socket_write, writes the whole byte array provided to the socket
 fn (mut ws Client) socket_write(bytes []byte) ? {
 	lock  {

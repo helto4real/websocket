@@ -133,10 +133,10 @@ pub fn (mut s SSLConn) connect(mut tcp_conn net.TcpConn) ? {
 	}
 }
 
-pub fn (mut s SSLConn) read_into(mut buffer []Byte) ?int {
+pub fn (mut s SSLConn) socket_read_into_ptr(buf_ptr byteptr, len int) ?int {
 	mut res := 0
 	for {
-		res = C.SSL_read(s.ssl, buffer.data, buffer.len)
+		res = C.SSL_read(s.ssl, buf_ptr, len)
 		if res < 0 {
 			err_res := s.ssl_error(res)?
 			if err_res == .ssl_error_want_read {
@@ -164,6 +164,10 @@ pub fn (mut s SSLConn) read_into(mut buffer []Byte) ?int {
 		}
 		break
 	}
+	return res
+}
+pub fn (mut s SSLConn) read_into(mut buffer []Byte) ?int {
+	res :=  s.socket_read_into_ptr(byteptr(buffer.data), buffer.len)?
 	return res
 }
 

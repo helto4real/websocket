@@ -8,7 +8,7 @@ fn main() {
 	go start_server()
 	time.sleep_ms(100)
 	go start_client()
-	go start_client_disconnect()
+	// go start_client_disconnect()
 	println('press enter to quit...')
 	os.get_line()
 }
@@ -16,7 +16,7 @@ fn main() {
 fn start_server() ? {
 	mut s := websocket.new_server(30000, '')
 	// Make that in execution test time give time to execute at least one time
-	s.ping_interval = 1
+	s.ping_interval = 100
 	s.on_connect(fn (mut s websocket.ServerClient) ?bool {
 		// Here you can look att the client info and accept or not accept
 		// just returning a true/false
@@ -26,8 +26,8 @@ fn start_server() ? {
 		return true
 	})?
 	s.on_message(fn (mut ws websocket.Client, msg &websocket.Message) ? {
-		payload := if msg.payload.len == 0 { '' } else { string(msg.payload) }
-		println('client ($ws.id) got message: opcode: $msg.opcode, payload: $payload')
+		// payload := if msg.payload.len == 0 { '' } else { string(msg.payload, msg.payload.len) }
+		// println('server client ($ws.id) got message: opcode: $msg.opcode, payload: $payload')
 		ws.write(msg.payload, msg.opcode) or {
 			panic(err)
 		}
@@ -57,7 +57,8 @@ fn start_client() ? {
 	})
 	// use on_message_ref if you want to send any reference object
 	ws.on_message(fn (mut ws websocket.Client, msg &websocket.Message) ? {
-		println('client got type: $msg.opcode payload:\n$msg.payload')
+		payload := if msg.payload.len == 0 { '' } else { string(msg.payload, msg.payload.len) }
+		println('client got type: $msg.opcode payload:\n$payload')
 	})
 	// you can add any pointer reference to use in callback
 	// t := TestRef{count: 10}
@@ -112,13 +113,18 @@ fn start_client_disconnect() ? {
 }
 
 fn write_echo(mut ws websocket.Client) ? {
-	for i := 0; i <= 3; i++ {
+	for i := 0; i <= 1000; i++ {
 		// Server will send pings every 30 seconds
-		ws.write('echo this!'.bytes(), .text_frame) or {
+		text := 'echo this!'.bytes()
+		ws.write(text, .text_frame) or {
 			println('panicing writing $err')
 		}
-		time.sleep_ms(100)
+		unsafe {
+			text.free()
+		}
+		time.sleep_ms(10)
 	}
+	println('DONE')
 	/*
 	ws.close(1000, "normal") or {
 		println('panicing $err')

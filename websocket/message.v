@@ -25,7 +25,7 @@ mut:
 	opcode      OPCode
 	has_mask    bool
 	payload_len int
-	masking_key []byte = []byte{len: 4}
+	masking_key [4]byte
 }
 
 const (
@@ -75,26 +75,31 @@ fn is_data_frame(opcode OPCode) bool {
 	return opcode in [.text_frame, .binary_frame]
 }
 
-[inline]
 // read_payload, reads the payload from socket
-fn (mut ws Client) read_payload(payload_len int) ?[]byte {
-	if payload_len == 0 {
+fn (mut ws Client) read_payload(frame &Frame) ?[]byte {
+	if frame.payload_len == 0 {
 		return []byte{}
 	}
 	// TODO: make a dynamic reusable memory pool here
-	mut buffer := []byte{cap: payload_len}
-	mut read_buf := []byte{len: 1}
+	mut buffer := []byte{cap: frame.payload_len}
+	mut read_buf := [1]byte
 	mut bytes_read := 0
-	for bytes_read < payload_len {
-		len := ws.socket_read_into(mut read_buf)?
+	for bytes_read < frame.payload_len {
+		len := ws.socket_read_into_ptr(byteptr(read_buf), 1)?
 		if len != 1 {
 			return error('expected read all message, got zero')
 		}
 		bytes_read += len
 		buffer << read_buf[0]
 	}
-	if bytes_read != payload_len {
+	if bytes_read != frame.payload_len {
 		return error('failed to read payload')
+	}
+	
+	if frame.has_mask {
+		for i in 0 .. frame.payload_len {
+			buffer[i] ^= frame.masking_key[i % 4] & 0xff
+		}
 	}
 	return buffer
 }
@@ -111,32 +116,35 @@ fn (mut ws Client) validate_utf_8(opcode OPCode, payload []byte) ? {
 }
 
 // read_next_message reads 1 to n frames to compose a message
-pub fn (mut ws Client) read_next_message() ?&Message {
+pub fn (mut ws Client) read_next_message() ?Message {
 	for {
 		frame := ws.parse_frame_header()?
-		ws.debug_log('read_next_message: frame\n$frame')
+		// This debug message leaks so remove if needed
+		// ws.debug_log('read_next_message: frame\n$frame')
 		ws.validate_frame(&frame)?
-		mut frame_payload := ws.read_payload(frame.payload_len)?
-		if frame.has_mask {
-			for i in 0 .. frame_payload.len {
-				frame_payload[i] ^= frame.masking_key[i % 4] & 0xff
-			}
-			// frame.unmask_sequence(mut frame_payload)
-		}
+		frame_payload := ws.read_payload(&frame)?
+
 		if is_control_frame(frame.opcode) {
 			// Control frames can interject other frames
 			// and need to be returned immediately
-			return &Message{
+			msg := Message{
 				opcode: OPCode(frame.opcode)
-				payload: frame_payload
+				payload: frame_payload.clone()
 			}
+			unsafe {
+				frame_payload.free()
+			}
+			return msg
 		}
 		// If the message is fragmented we just put it on fragments
 		// a fragment is allowed to have zero size payload
 		if !frame.fin {
 			ws.fragments << &Fragment{
-				data: frame_payload
+				data: frame_payload.clone()
 				opcode: frame.opcode
+			}
+			unsafe {
+				frame_payload.free()
 			}
 			continue
 		}
@@ -145,10 +153,14 @@ pub fn (mut ws Client) read_next_message() ?&Message {
 				ws.logger.error('UTF8 validation error: $err, len of payload($frame_payload.len)')
 				return error(err)
 			}
-			return &Message{
+			msg := Message{
 				opcode: OPCode(frame.opcode)
-				payload: frame_payload
+				payload: frame_payload.clone()
 			}
+			unsafe {
+				frame_payload.free()
+			}
+			return msg
 		}
 		defer {
 			ws.fragments = []
@@ -160,14 +172,18 @@ pub fn (mut ws Client) read_next_message() ?&Message {
 		payload := ws.payload_from_fragments(frame_payload)?
 		opcode := ws.opcode_from_fragments()
 		ws.validate_utf_8(opcode, payload)?
-		return &Message{
+		msg := Message{
 			opcode: opcode
-			payload: payload
+			payload: payload.clone()
 		}
+		unsafe {
+			frame_payload.free()
+			payload.free()
+		}
+		return msg
 	}
 }
 
-[inline]
 // payload_from_fragments, returs the whole paylaod from fragmented message
 fn (ws Client) payload_from_fragments(fin_payload []byte) ?[]byte {
 	mut total_size := 0
@@ -198,23 +214,24 @@ fn (ws Client) opcode_from_fragments() OPCode {
 // parse_frame_header parses next message by decoding the incoming frames
 pub fn (mut ws Client) parse_frame_header() ?Frame {
 	// TODO: make a dynamic reusable memory pool here
-	mut buffer := []byte{cap: buffer_size}
-	// mut bytes_read 	:= u64(0)
+	// mut buffer := []byte{cap: buffer_size}
+	mut buffer := [256]byte
+	mut bytes_read := 0
 	mut frame := Frame{}
-	mut rbuff := []byte{len: 1}
+	mut rbuff := [1]byte
 	mut mask_end_byte := 0
 	for ws.state == .open {
 		// Todo: different error scenarios to make sure we close correctly on error
 		// reader.read_into(mut rbuff) ?
-		read_bytes := ws.socket_read_into(mut rbuff)?
+		read_bytes := ws.socket_read_into_ptr(byteptr(rbuff), 1)?
 		if read_bytes == 0 {
 			// This is probably a timeout or close
 			continue
 		}
-		buffer << rbuff[0]
-		// bytes_read++
+		buffer[bytes_read] = rbuff[0]
+		bytes_read++
 		// parses the first two header bytes to get basic frame information
-		if buffer.len == u64(header_len_offset) {
+		if bytes_read == u64(header_len_offset) {
 			frame.fin = (buffer[0] & 0x80) == 0x80
 			frame.rsv1 = (buffer[0] & 0x40) == 0x40
 			frame.rsv2 = (buffer[0] & 0x20) == 0x20
@@ -237,20 +254,20 @@ pub fn (mut ws Client) parse_frame_header() ?Frame {
 			frame.payload_len = frame.payload_len
 			frame.frame_size = frame.header_len + frame.payload_len
 			if !frame.has_mask && frame.payload_len < 126 {
-				return frame
+				break
 			}
 		}
-		if frame.payload_len == 126 && buffer.len == u64(extended_payload16_end_byte) {
+		if frame.payload_len == 126 && bytes_read == u64(extended_payload16_end_byte) {
 			frame.header_len += 2
 			frame.payload_len = 0
 			frame.payload_len |= buffer[2] << 8
 			frame.payload_len |= buffer[3] << 0
 			frame.frame_size = frame.header_len + frame.payload_len
 			if !frame.has_mask {
-				return frame
+				break
 			}
 		}
-		if frame.payload_len == 127 && buffer.len == u64(extended_payload64_end_byte) {
+		if frame.payload_len == 127 && bytes_read == u64(extended_payload64_end_byte) {
 			frame.header_len += 8 // TODO Not sure...
 			frame.payload_len = 0
 			frame.payload_len |= buffer[2] << 56
@@ -262,21 +279,21 @@ pub fn (mut ws Client) parse_frame_header() ?Frame {
 			frame.payload_len |= buffer[8] << 8
 			frame.payload_len |= buffer[9] << 0
 			if !frame.has_mask {
-				return frame
+				break
 			}
 		}
 		// We have a mask and we read the whole mask data
-		if frame.has_mask && buffer.len == mask_end_byte {
+		if frame.has_mask && bytes_read == mask_end_byte {
 			frame.masking_key[0] = buffer[mask_end_byte - 4]
 			frame.masking_key[1] = buffer[mask_end_byte - 3]
 			frame.masking_key[2] = buffer[mask_end_byte - 2]
 			frame.masking_key[3] = buffer[mask_end_byte - 1]
-			return frame
+			break
 		}
 	}
+	return frame
 }
 
-[inline]
 // unmask_sequence unmask any given sequence
 fn (f Frame) unmask_sequence(mut buffer []byte) {
 	for i in 0 .. buffer.len {
