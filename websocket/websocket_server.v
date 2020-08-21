@@ -171,3 +171,14 @@ fn (mut s Server) set_state(state State) {
 		s.state = state
 	}
 }
+
+pub fn (mut s Server) free() {
+	unsafe {
+		s.clients.free()
+		// s.logger.free()
+		// s.ls.free()
+		s.accept_client_callbacks.free()
+		s.message_callbacks.free()
+		s.close_callbacks.free()
+	}
+}

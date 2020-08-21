@@ -60,8 +60,9 @@ pub fn (mut ws Client) validate_frame(frame &Frame) ? {
 		}
 	}
 	if frame.fin == false && ws.fragments.len == 0 && frame.opcode == .continuation {
-		ws.close(1002, 'unexecpected continuation, there are no frames to continue, $frame')?
-		return error('unexecpected continuation, there are no frames to continue, $frame')
+		err_msg := 'unexecpected continuation, there are no frames to continue, $frame'
+		ws.close(1002, err_msg)?
+		return error(err_msg)
 	}
 }
 
@@ -82,10 +83,10 @@ fn (mut ws Client) read_payload(frame &Frame) ?[]byte {
 	}
 	// TODO: make a dynamic reusable memory pool here
 	mut buffer := []byte{cap: frame.payload_len}
-	mut read_buf := [1]byte
+	mut read_buf := [1]byte{}
 	mut bytes_read := 0
 	for bytes_read < frame.payload_len {
-		len := ws.socket_read_into_ptr(byteptr(read_buf), 1)?
+		len := ws.socket_read_into_ptr(byteptr(&read_buf), 1)?
 		if len != 1 {
 			return error('expected read all message, got zero')
 		}
@@ -95,7 +96,6 @@ fn (mut ws Client) read_payload(frame &Frame) ?[]byte {
 	if bytes_read != frame.payload_len {
 		return error('failed to read payload')
 	}
-	
 	if frame.has_mask {
 		for i in 0 .. frame.payload_len {
 			buffer[i] ^= frame.masking_key[i % 4] & 0xff
@@ -109,7 +109,7 @@ fn (mut ws Client) read_payload(frame &Frame) ?[]byte {
 fn (mut ws Client) validate_utf_8(opcode OPCode, payload []byte) ? {
 	if opcode in [.text_frame, .close] && !utf8.validate(payload.data, payload.len) {
 		ws.logger.error('malformed utf8 payload, payload len: ($payload.len)')
-		// ws.send_error_event('Recieved malformed utf8.')
+		ws.send_error_event('Recieved malformed utf8.')
 		ws.close(1007, 'malformed utf8 payload')
 		return error('malformed utf8 payload')
 	}
@@ -123,7 +123,6 @@ pub fn (mut ws Client) read_next_message() ?Message {
 		// ws.debug_log('read_next_message: frame\n$frame')
 		ws.validate_frame(&frame)?
 		frame_payload := ws.read_payload(&frame)?
-
 		if is_control_frame(frame.opcode) {
 			// Control frames can interject other frames
 			// and need to be returned immediately
@@ -151,6 +150,7 @@ pub fn (mut ws Client) read_next_message() ?Message {
 		if ws.fragments.len == 0 {
 			ws.validate_utf_8(frame.opcode, frame_payload) or {
 				ws.logger.error('UTF8 validation error: $err, len of payload($frame_payload.len)')
+				ws.send_error_event('UTF8 validation error: $err, len of payload($frame_payload.len)')
 				return error(err)
 			}
 			msg := Message{
@@ -215,10 +215,10 @@ fn (ws Client) opcode_from_fragments() OPCode {
 pub fn (mut ws Client) parse_frame_header() ?Frame {
 	// TODO: make a dynamic reusable memory pool here
 	// mut buffer := []byte{cap: buffer_size}
-	mut buffer := [256]byte
+	mut buffer := [256]byte{}
 	mut bytes_read := 0
 	mut frame := Frame{}
-	mut rbuff := [1]byte
+	mut rbuff := [1]byte{}
 	mut mask_end_byte := 0
 	for ws.state == .open {
 		// Todo: different error scenarios to make sure we close correctly on error

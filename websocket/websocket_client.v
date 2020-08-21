@@ -1,12 +1,10 @@
 // The websocket client implements the websocket capabilities
 // it is a refactor of the original V-websocket client class
 // from @thecoderr.
-
-// There are quite a few manual memory management free() going on 
+// There are quite a few manual memory management free() going on
 // int the code. This will be refactored once the memory management
-// is done. For now there are no leaks on message levels. Please 
+// is done. For now there are no leaks on message levels. Please
 // check with valgrind if you do any changes in the free calls
-
 module websocket
 
 import emily33901.net
@@ -15,6 +13,10 @@ import time
 import log
 import sync
 import rand
+
+const(
+	empty_bytearr = []byte{}
+)
 
 // Client represents websocket client state
 pub struct Client {
@@ -113,6 +115,7 @@ pub fn (mut ws Client) listen() ? {
 				return
 			}
 			ws.debug_log('failed to read next message: $err')
+			ws.send_error_event('failed to read next message: $err')
 			return error(err)
 		}
 		ws.debug_log('got message: $msg.opcode') // , payload: $msg.payload') leaks
@@ -135,6 +138,7 @@ pub fn (mut ws Client) listen() ? {
 				ws.debug_log('read: ping, sending pong')
 				ws.send_control_frame(.pong, 'PONG', msg.payload) or {
 					ws.logger.error('error in message callback sending PONG: $err')
+					ws.send_error_event('error in message callback sending PONG: $err')
 					if ws.panic_on_callback {
 						panic(err)
 					}
@@ -172,13 +176,14 @@ pub fn (mut ws Client) listen() ? {
 						return error('invalid close code: $code')
 					}
 					reason := if msg.payload.len > 2 { msg.payload[2..] } else { []byte{} }
+
 					if reason.len > 0 {
 						ws.validate_utf_8(.close, reason)?
 					}
 					if ws.state !in [.closing, .closed] {
 						// sending close back according to spec
 						ws.debug_log('close with reason, code: $code, reason: $reason')
-						r := if reason.len > 0 { string(reason) } else { '' }
+						r := if reason.len > 0 { string(reason, reason.len) } else { '' }
 						ws.close(code, r)?
 					}
 					unsafe {
@@ -190,16 +195,20 @@ pub fn (mut ws Client) listen() ? {
 						// sending close back according to spec
 						ws.close(1000, 'normal')?
 					}
+					
+					unsafe {
+						msg.free()
+					}
 				}
 				return
 			}
 			.continuation {
 				ws.logger.error('unexpected opcode continuation, nothing to continue')
+				ws.send_error_event('unexpected opcode continuation, nothing to continue')
 				ws.close(1002, 'nothing to continue')?
 				return error('unexpected opcode continuation, nothing to continue')
 			}
 		}
-
 	}
 }
 
@@ -220,8 +229,8 @@ pub fn (mut ws Client) pong() ? {
 	ws.send_control_frame(.pong, 'PONG', [])?
 }
 
-// write, writes a byte array with a websocket messagetype
-pub fn (mut ws Client) write(bytes []byte, code OPCode) ? {
+// write_ptr, writes len bytes provided a byteptr with a websocket messagetype
+pub fn (mut ws Client) write_ptr(bytes byteptr, payload_len int, code OPCode) ? {
 	// Temporary, printing bytes are leaking
 	ws.debug_log('write code: $code')
 	// ws.debug_log('write code: $code, payload: $bytes')
@@ -229,7 +238,7 @@ pub fn (mut ws Client) write(bytes []byte, code OPCode) ? {
 		// send error here later
 		return error('trying to write on a closed socket!')
 	}
-	payload_len := bytes.len
+	// payload_len := bytes.len
 	mut header_len := 2 + if payload_len > 125 { 2 } else { 0 } + if payload_len > 0xffff { 6 } else { 0 }
 	if !ws.is_server {
 		header_len += 4
@@ -296,10 +305,12 @@ pub fn (mut ws Client) write(bytes []byte, code OPCode) ? {
 			return error('frame too large')
 		}
 	}
-	len := header.len + bytes.len
-	mut frame_buf := []byte{cap: len}
-	frame_buf << header
-	frame_buf << bytes
+	len := header.len + payload_len
+	mut frame_buf := []byte{len: len}
+	unsafe {
+		C.memcpy(&frame_buf[0], byteptr(header.data), header.len)
+		C.memcpy(&frame_buf[header.len], bytes, payload_len)
+	}
 	if !ws.is_server {
 		for i in 0 .. payload_len {
 			frame_buf[header_len + i] ^= masking_key[i % 4] & 0xff
@@ -314,17 +325,29 @@ pub fn (mut ws Client) write(bytes []byte, code OPCode) ? {
 	}
 }
 
+// write, writes a byte array with a websocket messagetype
+pub fn (mut ws Client) write(bytes []byte, code OPCode) ? {
+	ws.write_ptr(byteptr(bytes.data), bytes.len, code)?
+}
+
+pub fn (mut ws Client) write_str(str string) ? {
+	ws.write_ptr(str.str, str.len, .text_frame)
+}
+
 // close, closes the websocket connection
 pub fn (mut ws Client) close(code int, message string) ? {
 	ws.debug_log('sending close, $code, $message')
 	if ws.state in [.closed, .closing] || ws.conn.sock.handle <= 1 {
 		ws.debug_log('close: Websocket allready closed ($ws.state), $message, $code handle($ws.conn.sock.handle)')
-		return error('Socket allready closed: $code')
+		err_msg := 'Socket allready closed: $code'
+		ret_err := error(err_msg)
+		// unsafe {
+		// 		err_msg.free()
+		// 	}
+		return ret_err
 	}
 	defer {
 		ws.shutdown_socket()
-	}
-	defer {
 		ws.reset_state()
 	}
 	ws.set_state(.closing)
@@ -332,15 +355,19 @@ pub fn (mut ws Client) close(code int, message string) ? {
 	if code > 0 {
 		code_ := C.htons(code)
 		message_len := message.len + 2
-		mut close_frame := [`0`].repeat(message_len)
+		mut close_frame := []byte{len: message_len} //[`0`].repeat(message_len)
 		close_frame[0] = byte(code_ & 0xFF)
 		close_frame[1] = byte(code_ >> 8)
 		code32 = (close_frame[0] << 8) + close_frame[1]
 		for i in 0 .. message.len {
 			close_frame[i + 2] = message[i]
 		}
+
 		ws.send_control_frame(.close, 'CLOSE', close_frame)?
 		ws.send_close_event(code, message)
+		unsafe {
+			close_frame.free()
+		}
 	} else {
 		ws.send_control_frame(.close, 'CLOSE', [])?
 		ws.send_close_event(code, '')
@@ -356,17 +383,18 @@ fn (mut ws Client) send_control_frame(code OPCode, frame_typ string, payload []b
 	}
 	header_len := if ws.is_server { 2 } else { 6 }
 	frame_len := header_len + payload.len
-	mut control_frame := [`0`].repeat(frame_len)
-	mut masking_key := []byte{}
+	mut control_frame := []byte{len:frame_len} //[`0`].repeat(frame_len)
+	mut masking_key := if !ws.is_server { create_masking_key()} else {empty_bytearr}
 	defer {
 		unsafe {
 			control_frame.free()
-			masking_key.free()
+			if masking_key.len > 0 {
+				masking_key.free()
+			}
 		}
 	}
 	control_frame[0] = byte(int(code) | 0x80)
 	if !ws.is_server {
-		masking_key = create_masking_key()
 		control_frame[1] = byte(payload.len | 0x80)
 		control_frame[2] = masking_key[0]
 		control_frame[3] = masking_key[1]
@@ -378,7 +406,7 @@ fn (mut ws Client) send_control_frame(code OPCode, frame_typ string, payload []b
 	if code == .close {
 		if payload.len >= 2 {
 			if !ws.is_server {
-				mut parsed_payload := [`0`].repeat(payload.len + 1)
+				mut parsed_payload := []byte{len:payload.len + 1}
 				unsafe {
 					C.memcpy(parsed_payload.data, &payload[0], payload.len)
 				}

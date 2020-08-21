@@ -31,8 +31,8 @@ fn (mut ws Client) socket_read_into(mut buffer []byte) ?int {
 fn (mut ws Client) socket_read_into_ptr(buf_ptr byteptr, len int) ?int {
 	lock  {
 		if ws.is_ssl {
-			// r := ws.ssl_conn.read_into(mut buffer)?
-			return 1
+			r := ws.ssl_conn.socket_read_into_ptr(buf_ptr, len)?
+			return r
 		} else {
 			for {
 				r := ws.conn.read_into_ptr(buf_ptr, len) or {

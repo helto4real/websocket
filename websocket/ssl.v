@@ -129,6 +129,7 @@ pub fn (mut s SSLConn) connect(mut tcp_conn net.TcpConn) ? {
 			}
 			return error('Could not connect using SSL. ($err_res),err')
 		}
+		println('CONNECT OK')
 		break
 	}
 }
@@ -156,10 +157,8 @@ pub fn (mut s SSLConn) socket_read_into_ptr(buf_ptr byteptr, len int) ?int {
 				}
 				continue
 			} else if err_res == .ssl_error_zero_return {
-				println(err_res)
 				return 0
 			}
-			println(err_res)
 			return error('Could not read using SSL. ($err_res),err')
 		}
 		break

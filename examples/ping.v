@@ -11,6 +11,7 @@ fn main() {
 	// go start_client_disconnect()
 	println('press enter to quit...')
 	os.get_line()
+	C.SSL_COMP_free_compression_methods()
 }
 
 fn start_server() ? {
@@ -38,6 +39,10 @@ fn start_server() ? {
 	s.listen() or {
 		// println('error on server listen: $err')
 	}
+
+	unsafe {
+		s.free()
+	}
 }
 
 fn start_client() ? {
@@ -57,8 +62,11 @@ fn start_client() ? {
 	})
 	// use on_message_ref if you want to send any reference object
 	ws.on_message(fn (mut ws websocket.Client, msg &websocket.Message) ? {
-		payload := if msg.payload.len == 0 { '' } else { string(msg.payload, msg.payload.len) }
-		println('client got type: $msg.opcode payload:\n$payload')
+		if msg.payload.len > 0 
+		{
+			message := string(msg.payload, msg.payload.len) 
+			println('client got type: $msg.opcode payload:\n$message')
+		}
 	})
 	// you can add any pointer reference to use in callback
 	// t := TestRef{count: 10}
@@ -74,11 +82,15 @@ fn start_client() ? {
 	ws.listen() or {
 		println('error on listen $err')
 	}
+
+	unsafe {
+		ws.free()
+	}
 }
 
 fn start_client_disconnect() ? {
-	mut ws := websocket.new_client('ws://localhost:30000')?
-	// mut ws := websocket.new_client('wss://echo.websocket.org:443')?
+	// mut ws := websocket.new_client('ws://localhost:30000')?
+	mut ws := websocket.new_client('wss://echo.websocket.org:443')?
 	// use on_open_ref if you want to send any reference object
 	ws.on_open(fn (mut ws websocket.Client) ? {
 		println('open!')
@@ -113,21 +125,18 @@ fn start_client_disconnect() ? {
 }
 
 fn write_echo(mut ws websocket.Client) ? {
+	message := 'echo this'
+
 	for i := 0; i <= 1000; i++ {
 		// Server will send pings every 30 seconds
-		text := 'echo this!'.bytes()
-		ws.write(text, .text_frame) or {
+		ws.write_str(message) or {
 			println('panicing writing $err')
 		}
-		unsafe {
-			text.free()
-		}
+
 		time.sleep_ms(10)
 	}
 	println('DONE')
-	/*
 	ws.close(1000, "normal") or {
 		println('panicing $err')
 	}
-	*/
 }

@@ -2,37 +2,9 @@ import websocket
 import time
 
 // Tests with external ws & wss servers
-fn test_ws() ? {
-	go start_server()
-	time.sleep_ms(100)
-	ws_test('ws://localhost:30000')?
-}
-
-fn start_server() ? {
-	mut s := websocket.new_server(30000, '')
-	// Make that in execution test time give time to execute at least one time
-	s.ping_interval = 100
-	s.on_connect(fn (mut s websocket.ServerClient) ?bool {
-		// Here you can look att the client info and accept or not accept
-		// just returning a true/false
-		if s.resource_name != '/' {
-			return false
-		}
-		return true
-	})?
-	s.on_message(fn (mut ws websocket.Client, msg &websocket.Message) ? {
-		// payload := if msg.payload.len == 0 { '' } else { string(msg.payload, msg.payload.len) }
-		// println('server client ($ws.id) got message: opcode: $msg.opcode, payload: $payload')
-		ws.write(msg.payload, msg.opcode) or {
-			panic(err)
-		}
-	})
-	s.on_close(fn (mut ws websocket.Client, code int, reason string) ? {
-		// println('client ($ws.id) closed connection')
-	})
-	s.listen() or {
-		// println('error on server listen: $err')
-	}
+fn main() {
+	ws_test('ws://echo.websocket.org:80')?
+	ws_test('wss://echo.websocket.org:443')?
 }
 
 fn ws_test(uri string) ? {

@@ -2,6 +2,7 @@ module websocket
 
 import encoding.base64
 import strings
+
 // handshake manage the handshake part of connecting
 fn (mut ws Client) handshake() ? {
 	nonce := get_nonce(ws.nonce_size)
@@ -28,7 +29,6 @@ fn (mut ws Client) handshake() ? {
 	defer {
 		handshake.free()
 	}
-
 	handshake_bytes := handshake.bytes()
 	ws.debug_log('sending handshake: $handshake')
 	ws.socket_write(handshake_bytes)?
@@ -83,9 +83,6 @@ fn (mut s Server) parse_client_handshake(client_handshake string, mut c Client) 
 				seckey = create_key_challenge_response(key)?
 				s.logger.debug('server-> challenge: $seckey, response: ${keys[1]}')
 				flags << .has_accept
-				unsafe {
-					key.free()
-				}
 			}
 			else {
 				// We ignore other headers like protocol for now
@@ -110,16 +107,17 @@ fn (mut s Server) parse_client_handshake(client_handshake string, mut c Client) 
 		flags.free()
 		get_tokens.free()
 		seckey.free()
+		key.free()
 	}
 	return server_handshake, server_client
 }
 
 fn (mut ws Client) read_handshake_str() ?string {
 	mut total_bytes_read := 0
-	mut msg := [1024]byte 
-	mut buffer := [1]byte
+	mut msg := [1024]byte{}
+	mut buffer := [1]byte{}
 	for total_bytes_read < 1024 {
-		bytes_read := ws.socket_read_into_ptr(byteptr(buffer), 1)?
+		bytes_read := ws.socket_read_into_ptr(byteptr(&buffer), 1)?
 		if bytes_read == 0 {
 			return error('unexpected no response from handshake')
 		}
@@ -141,7 +139,6 @@ fn (mut ws Client) read_handshake(seckey string) ? {
 	unsafe {
 		msg.free()
 	}
-	
 }
 
 fn (mut ws Client) check_handshake_response(handshake_response, seckey string) ? {
