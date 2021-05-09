@@ -1,3 +1,6 @@
+# THIS IS NOT MAINTAINED 
+This implementation is now a part of V and this means there are no reason to maintain this version. I keep it for future references. 
+
 # New V-websocket library
 
 This is a refactor of the current web socket library to comply with V-like style of programming. It is built on top of Emily net library and passes all the autobahn tests for clients. 
