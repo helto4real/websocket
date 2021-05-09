@@ -19,6 +19,7 @@ pub:
 	port                    int
 	is_ssl                  bool = false
 pub mut:
+	// If it's set to 0, it don't handle the ping sending to the clients
 	ping_interval           int = 30 // in seconds
 	state                   State
 }
@@ -50,7 +51,9 @@ pub fn (mut s Server) listen() ? {
 	s.logger.info('websocket server: start listen on port $s.port')
 	s.ls = net.listen_tcp(s.port)?
 	s.set_state(.open)
-	go s.handle_ping()
+	if s.ping_interval == 0 {
+		go s.handle_ping()
+	}
 	for {
 		c := s.accept_new_client() or {
 			continue
@@ -63,39 +66,50 @@ pub fn (mut s Server) listen() ? {
 fn (mut s Server) close() {
 }
 
-// Todo: make thread safe
 fn (mut s Server) handle_ping() {
-	mut clients_to_remove := []string{}
 	for s.state == .open {
 		time.sleep(s.ping_interval)
-		for _, cli in s.clients {
-			mut c := cli
-			if c.client.state == .open {
-				c.client.ping() or {
-					s.logger.debug('server-> error sending ping to client')
-					// todo fix better close message, search the standard
-					c.client.close(1002, 'Clossing connection: ping send error') or {
-						// we want to continue even if error
-						continue
-					}
-					clients_to_remove << c.client.id
-				}
-				if (time.now().unix - c.client.last_pong_ut) > s.ping_interval * 2 {
-					clients_to_remove << c.client.id
-					c.client.close(1000, 'no pong received') or {
-						continue
-					}
-				}
-			}
-		}
-		// TODO replace for with s.clients.delete_all(clients_to_remove) if (https://github.com/vlang/v/pull/6020) merges
-		for client in clients_to_remove {
-			lock  {
-				s.clients.delete(client)
-			}
-		}
-		clients_to_remove.clear()
+		s.priv_send_ping()
 	}
+}
+
+pub fn (mut s Server) send_ping()? {
+	if s.ping_interval != 0 {
+		s.priv_send_ping()
+	} else {
+		return error("WS Server it's handling ping sending")
+	}
+}
+
+// Todo: make thread safe
+fn (mut s Server) priv_send_ping() {
+	mut clients_to_remove := []string{}
+	for _, cli in s.clients {
+		mut c := cli
+		if c.client.state == .open {
+			c.client.ping() or {
+				s.logger.debug('server-> error sending ping to client')
+				// todo fix better close message, search the standard
+				c.client.close(1002, 'Clossing connection: ping send error') or {
+					// we want to continue even if error
+					continue
+				}
+				clients_to_remove << c.client.id
+			}
+			if (time.now().unix - c.client.last_pong_ut) > s.ping_interval * 2 {
+				clients_to_remove << c.client.id
+				c.client.close(1000, 'no pong received') or {
+					continue
+				}
+			}
+		}
+	}
+	for client in clients_to_remove {
+		lock  {
+			s.clients.delete(client)
+		}
+	}
+	clients_to_remove.clear()
 }
 
 fn (mut s Server) serve_client(mut c Client) ? {
